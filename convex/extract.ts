@@ -11,10 +11,9 @@ export const extractFixtureData = internalAction({
   args: { sessionId: v.id("sessions") },
   handler: async (ctx, args) => {
     try {
-      const session = await ctx.runQuery(
-        internal.sessions.internalGetSession,
-        { id: args.sessionId }
-      );
+      const session = await ctx.runQuery(internal.sessions.internalGetSession, {
+        id: args.sessionId,
+      });
       if (!session?.pdfStorageId) {
         throw new Error("Session has no PDF");
       }
@@ -30,7 +29,7 @@ export const extractFixtureData = internalAction({
       const startTime = Date.now();
 
       const result = await generateText({
-        model: anthropic("claude-sonnet-4-5-20250929"),
+        model: anthropic("claude-haiku-4-5-20251001"),
         output: Output.object({ schema: fixtureDataSchema }),
         messages: [
           {
