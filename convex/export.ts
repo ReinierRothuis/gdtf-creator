@@ -26,7 +26,7 @@ export const exportGdtf = action({
 
     const gdtfBuffer = await zip.generateAsync({
       type: "arraybuffer",
-      compression: "DEFLATE",
+      compression: "STORE",
     });
 
     const blob = new Blob([gdtfBuffer], {
