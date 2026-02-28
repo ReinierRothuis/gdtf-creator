@@ -11,7 +11,8 @@
       "WebFetch(domain:gdtf.eu)",
       "WebFetch(domain:sdk.vercel.ai)",
       "WebFetch(domain:ai-sdk.dev)",
-      "WebFetch(domain:stack.convex.dev)"
+      "WebFetch(domain:stack.convex.dev)",
+      "Bash(git -C /Users/reinierrothuis/dev/events/gdtf-creator log --oneline)"
     ]
   }
 }
