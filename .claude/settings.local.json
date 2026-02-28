@@ -12,7 +12,14 @@
       "WebFetch(domain:sdk.vercel.ai)",
       "WebFetch(domain:ai-sdk.dev)",
       "WebFetch(domain:stack.convex.dev)",
-      "Bash(git -C /Users/reinierrothuis/dev/events/gdtf-creator log --oneline)"
+      "Bash(git -C /Users/reinierrothuis/dev/events/gdtf-creator log --oneline)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm build:*)",
+      "Bash(git -C /Users/reinierrothuis/dev/events/gdtf-creator status)",
+      "Bash(git -C /Users/reinierrothuis/dev/events/gdtf-creator diff --cached)",
+      "Bash(git -C /Users/reinierrothuis/dev/events/gdtf-creator diff)",
+      "Bash(git -C /Users/reinierrothuis/dev/events/gdtf-creator log --oneline -20)"
     ]
   }
 }

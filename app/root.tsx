@@ -19,7 +19,7 @@ export const links: Route.LinksFunction = () => [
   },
   {
     rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap",
+    href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap",
   },
 ];
 
@@ -32,7 +32,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Meta />
         <Links />
       </head>
-      <body>
+      <body className="font-mono antialiased">
         {children}
         <ScrollRestoration />
         <Scripts />
@@ -62,14 +62,18 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   }
 
   return (
-    <main className="pt-16 p-4 container mx-auto">
-      <h1>{message}</h1>
-      <p>{details}</p>
-      {stack && (
-        <pre className="w-full p-4 overflow-x-auto">
-          <code>{stack}</code>
-        </pre>
-      )}
+    <main className="flex min-h-screen items-center justify-center bg-void p-6">
+      <div className="border border-haze bg-deck p-6">
+        <h1 className="font-mono text-xl font-bold uppercase tracking-widest text-error">
+          {message}
+        </h1>
+        <p className="mt-2 font-sans text-sm text-spot">{details}</p>
+        {stack && (
+          <pre className="mt-4 max-w-2xl overflow-x-auto border border-haze bg-pit p-4 font-mono text-xs text-wash">
+            <code>{stack}</code>
+          </pre>
+        )}
+      </div>
     </main>
   );
 }

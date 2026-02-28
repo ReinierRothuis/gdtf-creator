@@ -1,15 +1,81 @@
 @import "tailwindcss" source(".");
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  /* Font stacks */
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-sans: "Inter", ui-sans-serif, sans-serif;
+
+  /* Surface scale — stage architecture, bottom to top */
+  --color-void: oklch(0.11 0.005 260);
+  --color-pit: oklch(0.14 0.005 260);
+  --color-deck: oklch(0.17 0.006 260);
+  --color-rig: oklch(0.20 0.006 260);
+  --color-truss: oklch(0.23 0.007 260);
+  --color-grid: oklch(0.27 0.007 260);
+  --color-haze: oklch(0.32 0.008 260);
+  --color-wash: oklch(0.50 0.010 260);
+  --color-spot: oklch(0.68 0.010 260);
+  --color-flood: oklch(0.92 0.005 260);
+
+  /* Accent — stage lighting */
+  --color-cyan: oklch(0.82 0.18 195);
+  --color-magenta: oklch(0.68 0.25 330);
+  --color-amber: oklch(0.78 0.18 75);
+  --color-uv: oklch(0.58 0.25 290);
+
+  /* Accent — dim variants */
+  --color-cyan-dim: oklch(0.25 0.06 195);
+  --color-magenta-dim: oklch(0.22 0.08 330);
+  --color-amber-dim: oklch(0.25 0.06 75);
+  --color-uv-dim: oklch(0.20 0.08 290);
+
+  /* Semantic */
+  --color-ok: oklch(0.72 0.19 155);
+  --color-error: oklch(0.65 0.22 25);
+  --color-caution: oklch(0.78 0.18 75);
+  --color-info: oklch(0.82 0.18 195);
+
+  /* Animations */
+  --animate-scan: scan 3s linear infinite;
+  --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
+  --animate-strobe: strobe 0.15s steps(2, start) 3;
+  --animate-waveform: waveform 1.2s ease-in-out infinite;
 }
 
+@keyframes scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+@keyframes strobe {
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes waveform {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+/* Base styles */
 html,
 body {
-  @apply bg-white dark:bg-gray-950;
+  @apply bg-void text-flood;
+  color-scheme: dark;
+}
 
-  @media (prefers-color-scheme: dark) {
-    color-scheme: dark;
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
