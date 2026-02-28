@@ -51,7 +51,136 @@ export const extractFixtureData = internalAction({
 4. **DMX modes** — each mode with:
    - Mode name and total channel count
    - Every channel: channel number, GDTF attribute name (see below), pretty/display name, default DMX value (0–255)
+   - **Channel functions**: For each channel, extract ALL DMX value ranges that define different behaviors. Each function needs: name, dmxFrom, dmxTo (0–255 range). Optionally include physicalFrom/physicalTo for continuous ranges.
+   - **Sub-fixtures**: If a mode has repeating channel groups for individually controllable pixels, cells, or sections (e.g. "48ch" mode with 12×RGBW pixels), use the \`subFixtures\` field (see below). When using subFixtures, only include the **global/master** channels (virtual dimmer, strobe, macro, etc.) in the \`channels\` array — do NOT repeat individual pixel channels.
 5. **Physical properties** — weight (kg), dimensions width/height/depth (mm), power consumption (W). Include units in the string values.
+6. **Pan/tilt range** — If this is a moving head or scanner, extract the pan range and tilt range in degrees (e.g. panRange: 540, tiltRange: 270).
+7. **Wheels** — Extract color wheel and gobo wheel definitions if present. Each wheel needs a name, type ("Color" or "Gobo"), and an array of slots with names. For color wheels, include the color as a CSS-compatible color string if determinable (e.g. "#ff0000" for red).
+8. **Beam properties** — Extract from the spec/technical data section: lampType (e.g. "LED", "Discharge"), beamAngle (degrees), fieldAngle (degrees), colorTemperature (Kelvin), cri (0–100), luminousFlux (lumens), beamType ("Wash", "Spot", or "None").
+
+# Channel functions example
+
+For a shutter channel with these DMX ranges in the PDF:
+- 0-19: No function
+- 20-24: Shutter open
+- 25-64: Strobe (fast to slow)
+- 65-69: Shutter open
+- 70-84: Opening pulse (fast to slow)
+- 85-89: Shutter open
+- 90-104: Closing pulse (fast to slow)
+- 105-109: Shutter open
+- 110-124: Random strobe (fast to slow)
+- 125-255: Shutter open
+
+Extract as:
+\`\`\`json
+{
+  "channel": 4,
+  "gdtfAttribute": "Shutter1",
+  "prettyName": "Strobe effect",
+  "defaultValue": 0,
+  "functions": [
+    { "name": "No function", "dmxFrom": 0, "dmxTo": 19, "attribute": "Shutter1" },
+    { "name": "Shutter open", "dmxFrom": 20, "dmxTo": 24, "attribute": "Shutter1" },
+    { "name": "Strobe fast to slow", "dmxFrom": 25, "dmxTo": 64, "attribute": "Shutter1Strobe", "physicalFrom": 20.0, "physicalTo": 1.0 },
+    { "name": "Shutter open", "dmxFrom": 65, "dmxTo": 69, "attribute": "Shutter1" },
+    { "name": "Opening pulse fast to slow", "dmxFrom": 70, "dmxTo": 84, "attribute": "Shutter1StrobePulseOpen", "physicalFrom": 5.0, "physicalTo": 0.5 },
+    { "name": "Shutter open", "dmxFrom": 85, "dmxTo": 89, "attribute": "Shutter1" },
+    { "name": "Closing pulse fast to slow", "dmxFrom": 90, "dmxTo": 104, "attribute": "Shutter1StrobePulseClose", "physicalFrom": 5.0, "physicalTo": 0.5 },
+    { "name": "Shutter open", "dmxFrom": 105, "dmxTo": 109, "attribute": "Shutter1" },
+    { "name": "Random strobe fast to slow", "dmxFrom": 110, "dmxTo": 124, "attribute": "Shutter1StrobeRandom", "physicalFrom": 20.0, "physicalTo": 1.0 },
+    { "name": "Shutter open", "dmxFrom": 125, "dmxTo": 255, "attribute": "Shutter1" }
+  ]
+}
+\`\`\`
+
+The \`attribute\` field on each function is optional and defaults to the channel's \`gdtfAttribute\`. Use it when a DMX range activates a different GDTF sub-attribute. Common shutter sub-attributes: Shutter1Strobe, Shutter1StrobePulseOpen, Shutter1StrobePulseClose, Shutter1StrobeRandom, Shutter1StrobeRandomPulseOpen, Shutter1StrobeRandomPulseClose.
+
+For a dimmer channel (0–255 = 0–100% intensity):
+\`\`\`json
+{
+  "channel": 1,
+  "gdtfAttribute": "Dimmer",
+  "prettyName": "Dim",
+  "defaultValue": 0,
+  "functions": [
+    { "name": "Dimmer", "dmxFrom": 0, "dmxTo": 255, "physicalFrom": 0, "physicalTo": 1.0 }
+  ]
+}
+\`\`\`
+
+If a channel has no distinct function ranges (e.g. a simple 0–255 proportional channel), you may omit the \`functions\` array entirely.
+
+# Wheels example
+
+\`\`\`json
+{
+  "wheels": [
+    {
+      "name": "Color Wheel 1",
+      "type": "Color",
+      "slots": [
+        { "name": "Open", "color": "#ffffff" },
+        { "name": "Red", "color": "#ff0000" },
+        { "name": "Blue", "color": "#0000ff" },
+        { "name": "Green", "color": "#00ff00" },
+        { "name": "Yellow", "color": "#ffff00" },
+        { "name": "Magenta", "color": "#ff00ff" },
+        { "name": "Orange", "color": "#ff8000" }
+      ]
+    },
+    {
+      "name": "Gobo Wheel 1",
+      "type": "Gobo",
+      "slots": [
+        { "name": "Open" },
+        { "name": "Dot" },
+        { "name": "Star" },
+        { "name": "Circle" }
+      ]
+    }
+  ]
+}
+\`\`\`
+
+# Sub-fixtures (pixel/cell control)
+
+Many fixtures have modes with individually controllable pixels, cells, or LED sections. These appear as repeating channel groups in the DMX chart. When you detect this pattern, use the \`subFixtures\` field on the mode instead of listing every pixel channel individually.
+
+- \`name\`: what each unit is called — "Pixel", "Cell", "Section", "LED", etc.
+- \`count\`: how many sub-fixtures there are
+- \`channels\`: the channel template for ONE sub-fixture (ordered list of attributes)
+- \`firstChannel\`: the 1-based channel number where the sub-fixture range begins in the mode
+
+The mode's \`channels\` array should ONLY contain global/master channels (virtual dimmer, master strobe, effects, etc.) — not the per-pixel channels.
+
+Example: An LED bar with 12 RGBW pixels. Mode "52ch" has channels 1-4 as global controls, then 12×4 pixel channels starting at channel 5:
+
+\`\`\`json
+{
+  "name": "52ch",
+  "channelCount": 52,
+  "channels": [
+    { "channel": 1, "gdtfAttribute": "Dimmer", "prettyName": "Dim", "defaultValue": 0 },
+    { "channel": 2, "gdtfAttribute": "Shutter1", "prettyName": "Strobe", "defaultValue": 255 },
+    { "channel": 3, "gdtfAttribute": "ColorMacro", "prettyName": "Color Macro", "defaultValue": 0 },
+    { "channel": 4, "gdtfAttribute": "Function", "prettyName": "Control", "defaultValue": 0 }
+  ],
+  "subFixtures": {
+    "name": "Pixel",
+    "count": 12,
+    "channels": [
+      { "gdtfAttribute": "ColorAdd_R", "prettyName": "R", "defaultValue": 0 },
+      { "gdtfAttribute": "ColorAdd_G", "prettyName": "G", "defaultValue": 0 },
+      { "gdtfAttribute": "ColorAdd_B", "prettyName": "B", "defaultValue": 0 },
+      { "gdtfAttribute": "ColorAdd_W", "prettyName": "W", "defaultValue": 0 }
+    ],
+    "firstChannel": 5
+  }
+}
+\`\`\`
+
+Not every mode needs subFixtures. A simple "4ch RGBW" mode on the same fixture would just list 4 channels with no subFixtures. Only use subFixtures when there are repeating per-pixel/cell channel groups.
 
 # GDTF attribute names
 

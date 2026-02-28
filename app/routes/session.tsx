@@ -16,7 +16,7 @@ import { DmxTable } from "~/components/dmx-table";
 import { ExtractionProgress } from "~/components/extraction-progress";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import type { FixtureData } from "../../convex/schema/fixture";
+import type { FixtureData, Wheel } from "../../convex/schema/fixture";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -232,8 +232,60 @@ export default function Session({ params }: Route.ComponentProps) {
                   </span>
                 }
               >
-                <DmxTable channels={currentMode.channels} />
+                <DmxTable mode={currentMode} />
               </Panel>
+
+              {/* Wheels */}
+              {fixture.wheels && fixture.wheels.length > 0 && (
+                <Panel title="Wheels">
+                  <div className="flex flex-col gap-4">
+                    {fixture.wheels.map((wheel) => (
+                      <WheelDisplay key={wheel.name} wheel={wheel} />
+                    ))}
+                  </div>
+                </Panel>
+              )}
+
+              {/* Beam Properties */}
+              {fixture.beam && hasBeamData(fixture.beam) && (
+                <Panel title="Beam Properties">
+                  <div className="grid grid-cols-3 gap-4">
+                    {fixture.beam.lampType && (
+                      <Field label="Lamp Type" value={fixture.beam.lampType} />
+                    )}
+                    {fixture.beam.beamAngle !== undefined && (
+                      <Field
+                        label="Beam Angle"
+                        value={`${fixture.beam.beamAngle}\u00B0`}
+                      />
+                    )}
+                    {fixture.beam.fieldAngle !== undefined && (
+                      <Field
+                        label="Field Angle"
+                        value={`${fixture.beam.fieldAngle}\u00B0`}
+                      />
+                    )}
+                    {fixture.beam.colorTemperature !== undefined && (
+                      <Field
+                        label="Color Temp"
+                        value={`${fixture.beam.colorTemperature} K`}
+                      />
+                    )}
+                    {fixture.beam.cri !== undefined && (
+                      <Field label="CRI" value={`${fixture.beam.cri}`} />
+                    )}
+                    {fixture.beam.luminousFlux !== undefined && (
+                      <Field
+                        label="Luminous Flux"
+                        value={`${fixture.beam.luminousFlux} lm`}
+                      />
+                    )}
+                    {fixture.beam.beamType && (
+                      <Field label="Beam Type" value={fixture.beam.beamType} />
+                    )}
+                  </div>
+                </Panel>
+              )}
 
               {/* Physical */}
               <Panel title="Physical Description">
@@ -246,6 +298,18 @@ export default function Session({ params }: Route.ComponentProps) {
                   <Field label="Width" value={fixture.physical.width} />
                   <Field label="Height" value={fixture.physical.height} />
                   <Field label="Depth" value={fixture.physical.depth} />
+                  {fixture.physical.panRange !== undefined && (
+                    <Field
+                      label="Pan Range"
+                      value={`${fixture.physical.panRange}\u00B0`}
+                    />
+                  )}
+                  {fixture.physical.tiltRange !== undefined && (
+                    <Field
+                      label="Tilt Range"
+                      value={`${fixture.physical.tiltRange}\u00B0`}
+                    />
+                  )}
                 </div>
               </Panel>
             </div>
@@ -306,6 +370,47 @@ function SidebarItem({
         {sublabel && <span className="text-xs text-wash">{sublabel}</span>}
       </div>
     </div>
+  );
+}
+
+function WheelDisplay({ wheel }: { wheel: Wheel }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-bold uppercase tracking-widest text-spot">
+          {wheel.name}
+        </span>
+        <span className="text-xs text-wash">{wheel.type}</span>
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {wheel.slots.map((slot, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-1.5 border border-haze bg-pit px-2 py-1"
+          >
+            {slot.color && (
+              <div
+                className="h-3 w-3 border border-haze"
+                style={{ backgroundColor: slot.color }}
+              />
+            )}
+            <span className="text-xs text-flood">{slot.name}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function hasBeamData(beam: NonNullable<FixtureData["beam"]>): boolean {
+  return !!(
+    beam.lampType ||
+    beam.beamAngle !== undefined ||
+    beam.fieldAngle !== undefined ||
+    beam.colorTemperature !== undefined ||
+    beam.cri !== undefined ||
+    beam.luminousFlux !== undefined ||
+    beam.beamType
   );
 }
 

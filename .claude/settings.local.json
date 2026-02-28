@@ -25,7 +25,9 @@
       "Bash(test:*)",
       "Bash(gh api:*)",
       "Bash(curl:*)",
-      "Bash(npx convex dev:*)"
+      "Bash(npx convex dev:*)",
+      "WebFetch(domain:gdtf-share.com)",
+      "WebFetch(domain:blenderdmx.eu)"
     ]
   }
 }
