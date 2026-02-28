@@ -34,6 +34,7 @@ DESIGN.md      Design system reference (colors, typography, components)
 - SSR enabled, Vite environment API (`v8_viteEnvironmentApi`)
 - No border-radius, no box-shadow — brutalist design language
 - Fonts: JetBrains Mono (values/labels), Inter (UI text)
+- All new front-end components must be added to the `/storybook` route (`app/routes/storybook.tsx`) with live examples and a props table
 
 ## Design System
 

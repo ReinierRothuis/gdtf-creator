@@ -6,7 +6,7 @@ export function ExtractionProgress({
   stage: string;
 }) {
   return (
-    <div className="flex w-full max-w-lg flex-col items-center gap-6">
+    <div className="flex w-full flex-col items-center gap-6">
       {/* Waveform animation */}
       <div className="flex items-end gap-1">
         {Array.from({ length: 12 }).map((_, i) => (

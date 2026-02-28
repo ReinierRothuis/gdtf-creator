@@ -92,7 +92,6 @@ export default function Home() {
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    // Only clear when actually leaving the container, not entering a child
     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
       setIsDragging(false);
     }
@@ -130,87 +129,101 @@ export default function Home() {
         </div>
       )}
 
-      <main className="flex flex-1 flex-col items-center justify-center px-6 py-16">
-        {/* Hero */}
-        <div className="mb-12 text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-flood">
-            PDF to{" "}
-            <span className="text-cyan">.gdtf</span>{" "}
-            in seconds
-          </h1>
-          <p className="mt-3 max-w-md font-sans text-sm text-spot">
-            Upload a lighting fixture manual. AI extracts the data.
-            Download a valid GDTF file. No manual entry required.
-          </p>
-        </div>
+      <main className="grid h-[calc(100vh-48px)] grid-cols-[1fr_280px]">
+        {/* Left — Hero + Upload */}
+        <div className="flex flex-col justify-between p-8">
+          {/* Hero text */}
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-flood">
+              PDF to{" "}
+              <span className="text-cyan">.gdtf</span>{" "}
+              in seconds
+            </h1>
+            <p className="mt-3 max-w-lg font-sans text-sm text-spot">
+              Upload a lighting fixture manual. AI extracts the data.
+              Download a valid GDTF file. No manual entry required.
+            </p>
+          </div>
 
-        {/* Upload zone */}
-        <div className="w-full max-w-lg">
-          <label
-            className={`group flex cursor-pointer flex-col items-center gap-4 border border-dashed p-12 transition-colors duration-150 ${
-              isProcessing
-                ? "pointer-events-none opacity-40"
-                : "border-haze bg-pit hover:border-cyan hover:bg-cyan-dim"
-            }`}
-          >
-            <input
-              type="file"
-              accept=".pdf,application/pdf"
-              onChange={handleInputChange}
-              disabled={isProcessing}
-              className="sr-only"
-            />
-            {isProcessing ? (
-              <>
-                <div className="flex gap-1">
-                  {[0, 1, 2, 3, 4].map((i) => (
-                    <div
-                      key={i}
-                      className="h-6 w-1 animate-waveform bg-cyan"
-                      style={{ animationDelay: `${i * 0.15}s` }}
-                    />
-                  ))}
-                </div>
-                <p className="text-sm text-cyan">Uploading & creating session...</p>
-              </>
-            ) : (
-              <>
-                <Upload className="h-8 w-8 text-wash transition-colors duration-150 group-hover:text-cyan" />
-                <p className="text-sm text-spot">
-                  Drop a <span className="font-bold text-cyan">.pdf</span> fixture
-                  manual here
-                </p>
-                <p className="text-xs text-wash">or click to browse</p>
-              </>
+          {/* Upload zone — fills available width */}
+          <div className="flex flex-col gap-4">
+            <label
+              className={`group flex cursor-pointer flex-col items-center gap-4 border border-dashed p-16 transition-colors duration-150 ${
+                isProcessing
+                  ? "pointer-events-none opacity-40"
+                  : "border-haze bg-pit hover:border-cyan hover:bg-cyan-dim"
+              }`}
+            >
+              <input
+                type="file"
+                accept=".pdf,application/pdf"
+                onChange={handleInputChange}
+                disabled={isProcessing}
+                className="sr-only"
+              />
+              {isProcessing ? (
+                <>
+                  <div className="flex gap-1">
+                    {[0, 1, 2, 3, 4].map((i) => (
+                      <div
+                        key={i}
+                        className="h-6 w-1 animate-waveform bg-cyan"
+                        style={{ animationDelay: `${i * 0.15}s` }}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-sm text-cyan">Uploading & creating session...</p>
+                </>
+              ) : (
+                <>
+                  <Upload className="h-8 w-8 text-wash transition-colors duration-150 group-hover:text-cyan" />
+                  <p className="text-sm text-spot">
+                    Drop a <span className="font-bold text-cyan">.pdf</span> fixture
+                    manual here
+                  </p>
+                  <p className="text-xs text-wash">or click to browse</p>
+                </>
+              )}
+            </label>
+
+            {error && (
+              <p className="text-sm text-error">{error}</p>
             )}
-          </label>
+          </div>
+
+          {/* Spacer keeps upload zone vertically centered-ish */}
+          <div />
         </div>
 
-        {error && (
-          <p className="mt-4 text-sm text-error">{error}</p>
-        )}
-
-        {/* How it works */}
-        <div className="mt-16 grid w-full max-w-2xl grid-cols-3 gap-px bg-haze">
-          <Step
-            number="01"
-            icon={<FileText className="h-5 w-5" />}
-            label="Upload PDF"
-            description="Drop your fixture manual"
-          />
-          <Step
-            number="02"
-            icon={<Zap className="h-5 w-5" />}
-            label="AI Extracts"
-            description="LLM reads & structures data"
-          />
-          <Step
-            number="03"
-            icon={<Download className="h-5 w-5" />}
-            label="Download"
-            description="Get a valid .gdtf file"
-          />
-        </div>
+        {/* Right — Process steps sidebar */}
+        <aside className="flex flex-col border-l border-haze bg-pit">
+          <div className="px-4 py-3">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-wash">
+              How it works
+            </span>
+          </div>
+          <div className="flex flex-1 flex-col">
+            <Step
+              number="01"
+              icon={<FileText className="h-5 w-5" />}
+              label="Upload PDF"
+              description="Drop your fixture manual — any manufacturer, any format. The AI handles the rest."
+              active
+            />
+            <Step
+              number="02"
+              icon={<Zap className="h-5 w-5" />}
+              label="AI Extracts"
+              description="LLM reads the document, identifies DMX channels, modes, physical properties, and wheel data."
+            />
+            <Step
+              number="03"
+              icon={<Download className="h-5 w-5" />}
+              label="Download GDTF"
+              description="Get a spec-compliant GDTF 1.2 file ready for your lighting console."
+            />
+          </div>
+        </aside>
       </main>
     </div>
   );
@@ -221,20 +234,34 @@ function Step({
   icon,
   label,
   description,
+  active,
 }: {
   number: string;
   icon: React.ReactNode;
   label: string;
   description: string;
+  active?: boolean;
 }) {
   return (
-    <div className="flex flex-col items-center gap-2 bg-deck p-6 text-center">
-      <span className="text-xs font-bold tabular-nums text-wash">{number}</span>
-      <div className="text-cyan">{icon}</div>
-      <span className="text-xs font-bold uppercase tracking-widest text-flood">
-        {label}
-      </span>
-      <span className="font-sans text-xs text-spot">{description}</span>
+    <div
+      className={`flex flex-1 flex-col gap-3 border-b border-haze px-4 py-5 last:border-b-0 ${
+        active ? "bg-deck" : ""
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <span
+          className={`text-xs font-bold tabular-nums ${active ? "text-cyan" : "text-wash"}`}
+        >
+          {number}
+        </span>
+        <div className={active ? "text-cyan" : "text-spot"}>{icon}</div>
+        <span
+          className={`text-xs font-bold uppercase tracking-widest ${active ? "text-flood" : "text-spot"}`}
+        >
+          {label}
+        </span>
+      </div>
+      <p className="font-sans text-xs leading-relaxed text-spot">{description}</p>
     </div>
   );
 }

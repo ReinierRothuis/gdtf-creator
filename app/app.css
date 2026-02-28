@@ -40,6 +40,9 @@
   --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
   --animate-strobe: strobe 0.15s steps(2, start) 3;
   --animate-waveform: waveform 1.2s ease-in-out infinite;
+  --animate-lightshow: lightshow 2s ease-in-out infinite;
+  --animate-lightshow-glow: lightshow-glow 2s ease-in-out infinite;
+  --animate-lightshow-base: lightshow-base 2s ease-in-out infinite;
 }
 
 @keyframes scan {
@@ -60,6 +63,21 @@
 @keyframes waveform {
   0%, 100% { transform: scaleY(0.3); }
   50% { transform: scaleY(1); }
+}
+
+@keyframes lightshow {
+  0%, 100% { transform: rotateX(0deg); }
+  50% { transform: rotateX(-85deg); }
+}
+
+@keyframes lightshow-glow {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+@keyframes lightshow-base {
+  0%, 100% { background-color: oklch(0.11 0.005 260); }
+  50% { background-color: oklch(0.82 0.18 195); }
 }
 
 /* Base styles */

@@ -105,22 +105,68 @@ export default function Session({ params }: Route.ComponentProps) {
       <Topbar sessionActive />
 
       {(status === "uploading" || status === "extracting") && (
-        <main className="flex flex-1 flex-col items-center justify-center px-6">
-          <div className="mb-8 text-center">
-            <p className="text-xs uppercase tracking-widest text-spot">
-              Session{" "}
-              <span className="tabular-nums text-flood">{params.id}</span>
-            </p>
-          </div>
-          <ExtractionProgress
-            progress={status === "uploading" ? 5 : 50}
-            stage={
-              status === "uploading"
-                ? "Uploading PDF..."
-                : "Extracting fixture data with AI..."
-            }
-          />
-        </main>
+        <div className="grid h-[calc(100vh-48px)] grid-cols-[240px_1fr]">
+          {/* Sidebar — extraction steps */}
+          <aside className="flex flex-col border-r border-haze bg-pit p-3">
+            <nav className="flex flex-col gap-0.5">
+              <div className="px-3 pb-1 pt-1">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-wash">
+                  Session
+                </span>
+              </div>
+              <div className="flex items-center gap-2 border-l-2 border-transparent px-3 py-2 text-spot">
+                <FileText className="h-4 w-4" />
+                <div className="flex flex-col">
+                  <span className="text-sm">{params.id}</span>
+                  <span className="text-xs text-wash">Session ID</span>
+                </div>
+              </div>
+
+              <div className="px-3 pb-1 pt-4">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-wash">
+                  Pipeline
+                </span>
+              </div>
+              <ExtractionStep
+                number="01"
+                label="Upload"
+                done={status === "extracting"}
+                active={status === "uploading"}
+              />
+              <ExtractionStep
+                number="02"
+                label="Extract"
+                active={status === "extracting"}
+              />
+              <ExtractionStep number="03" label="Export" />
+            </nav>
+          </aside>
+
+          {/* Content — progress */}
+          <main className="flex flex-col bg-void p-8">
+            <div className="mb-6">
+              <h1 className="text-xl font-bold tracking-tight text-flood">
+                {status === "uploading" ? "Uploading" : "Extracting"}
+              </h1>
+              <p className="mt-1 text-sm text-spot">
+                {status === "uploading"
+                  ? "Sending your PDF to the extraction pipeline..."
+                  : "AI is reading the document and structuring fixture data..."}
+              </p>
+            </div>
+
+            <div className="flex flex-1 flex-col items-center justify-center">
+              <ExtractionProgress
+                progress={status === "uploading" ? 5 : 50}
+                stage={
+                  status === "uploading"
+                    ? "Uploading PDF..."
+                    : "Extracting fixture data with AI..."
+                }
+              />
+            </div>
+          </main>
+        </div>
       )}
 
       {status === "complete" && fixture && currentMode && (
@@ -330,6 +376,45 @@ export default function Session({ params }: Route.ComponentProps) {
             Start Over
           </a>
         </main>
+      )}
+    </div>
+  );
+}
+
+function ExtractionStep({
+  number,
+  label,
+  active,
+  done,
+}: {
+  number: string;
+  label: string;
+  active?: boolean;
+  done?: boolean;
+}) {
+  let textClass = "text-wash";
+  let borderClass = "border-transparent";
+  let bgClass = "";
+  if (done) {
+    textClass = "text-flood";
+    borderClass = "border-cyan/30";
+    bgClass = "bg-grid";
+  } else if (active) {
+    textClass = "text-cyan";
+    borderClass = "border-cyan";
+    bgClass = "bg-grid";
+  }
+  return (
+    <div
+      className={`flex items-center gap-2 border-l-2 px-3 py-2 ${borderClass} ${bgClass}`}
+    >
+      <span className={`text-xs font-bold tabular-nums ${done ? "text-cyan" : active ? "text-cyan" : "text-wash"}`}>
+        {number}
+      </span>
+      <span className={`text-sm ${textClass}`}>{label}</span>
+      {done && <CheckCircle className="ml-auto h-3.5 w-3.5 text-ok" />}
+      {active && (
+        <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-cyan" />
       )}
     </div>
   );
