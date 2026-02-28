@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/reinierrothuis/dev/events/gdtf-creator log --oneline -10)",
+      "Bash(git -C /Users/reinierrothuis/dev/events/gdtf-creator show:*)",
+      "WebSearch",
+      "WebFetch(domain:developers.cloudflare.com)",
+      "WebFetch(domain:docs.convex.dev)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.gdtf.eu)",
+      "WebFetch(domain:gdtf.eu)",
+      "WebFetch(domain:sdk.vercel.ai)",
+      "WebFetch(domain:ai-sdk.dev)",
+      "WebFetch(domain:stack.convex.dev)"
+    ]
+  }
+}
