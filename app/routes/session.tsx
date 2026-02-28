@@ -1,22 +1,22 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import {
   Download,
   CheckCircle,
   Layers,
   FileText,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
+import { useQuery, useAction } from "convex/react";
 import type { Route } from "./+types/session";
 import { Topbar } from "~/components/topbar";
 import { Panel } from "~/components/panel";
 import { Field, FieldRow } from "~/components/field";
 import { DmxTable } from "~/components/dmx-table";
 import { ExtractionProgress } from "~/components/extraction-progress";
-import {
-  MOCK_FIXTURE,
-  EXTRACTION_STAGES,
-  type SessionStatus,
-} from "~/lib/mock-data";
+import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
+import type { FixtureData } from "../../convex/schema/fixture";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -26,48 +26,85 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export default function Session({ params }: Route.ComponentProps) {
-  const [status, setStatus] = useState<SessionStatus>("extracting");
-  const [stageIndex, setStageIndex] = useState(0);
+  const session = useQuery(api.sessions.getSession, {
+    id: params.id as Id<"sessions">,
+  });
+  const exportGdtf = useAction(api.export.exportGdtf);
+
   const [selectedMode, setSelectedMode] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
   const [exportReady, setExportReady] = useState(false);
 
-  const stage = EXTRACTION_STAGES[stageIndex];
-  const fixture = MOCK_FIXTURE;
-  const currentMode = fixture.dmxModes[selectedMode];
+  const fixture = session?.fixtureData as FixtureData | undefined;
+  const currentMode = fixture?.dmxModes[selectedMode];
+  const status = session?.status;
 
-  // Simulate extraction progress
-  useEffect(() => {
-    if (status !== "extracting") return;
-
-    const timer = setInterval(() => {
-      setStageIndex((prev) => {
-        const next = prev + 1;
-        if (next >= EXTRACTION_STAGES.length) {
-          clearInterval(timer);
-          setStatus("complete");
-          return prev;
-        }
-        return next;
-      });
-    }, 1200);
-
-    return () => clearInterval(timer);
-  }, [status]);
-
-  const handleExport = useCallback(() => {
+  const handleExport = useCallback(async () => {
+    if (!session) return;
     setIsExporting(true);
-    setTimeout(() => {
+    try {
+      const url = await exportGdtf({
+        sessionId: session._id,
+      });
+      if (url) {
+        setExportReady(true);
+        const res = await fetch(url);
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        const manufacturer = fixture?.manufacturer ?? "Unknown";
+        const shortName = fixture?.shortName ?? "fixture";
+        a.download = `${manufacturer}-${shortName}`.replace(/\s+/g, "-") + ".gdtf";
+        a.click();
+        URL.revokeObjectURL(blobUrl);
+      }
+    } catch {
+      // Export error — could surface to UI
+    } finally {
       setIsExporting(false);
-      setExportReady(true);
-    }, 2000);
-  }, []);
+    }
+  }, [session, exportGdtf, fixture?.manufacturer, fixture?.shortName]);
+
+  // Loading state — waiting for Convex query
+  if (session === undefined) {
+    return (
+      <div className="flex min-h-screen flex-col bg-void">
+        <Topbar sessionActive />
+        <main className="flex flex-1 flex-col items-center justify-center px-6">
+          <Loader2 className="h-8 w-8 animate-spin text-cyan" />
+          <p className="mt-4 text-xs uppercase tracking-widest text-spot">
+            Loading session...
+          </p>
+        </main>
+      </div>
+    );
+  }
+
+  // Session not found
+  if (session === null) {
+    return (
+      <div className="flex min-h-screen flex-col bg-void">
+        <Topbar sessionActive />
+        <main className="flex flex-1 flex-col items-center justify-center gap-4 px-6">
+          <AlertCircle className="h-8 w-8 text-error" />
+          <p className="text-sm text-error">Session not found.</p>
+          <a
+            href="/"
+            className="border border-haze px-4 py-2 text-sm font-medium uppercase tracking-widest text-flood transition-colors duration-150 hover:border-spot"
+          >
+            Start Over
+          </a>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-void">
       <Topbar sessionActive />
 
-      {status === "extracting" && (
+      {(status === "uploading" || status === "extracting") && (
         <main className="flex flex-1 flex-col items-center justify-center px-6">
           <div className="mb-8 text-center">
             <p className="text-xs uppercase tracking-widest text-spot">
@@ -76,13 +113,17 @@ export default function Session({ params }: Route.ComponentProps) {
             </p>
           </div>
           <ExtractionProgress
-            progress={stage.progress}
-            stage={stage.label}
+            progress={status === "uploading" ? 5 : 50}
+            stage={
+              status === "uploading"
+                ? "Uploading PDF..."
+                : "Extracting fixture data with AI..."
+            }
           />
         </main>
       )}
 
-      {status === "complete" && (
+      {status === "complete" && fixture && currentMode && (
         <div className="grid h-[calc(100vh-48px)] grid-cols-[240px_1fr] grid-rows-1">
           {/* Sidebar */}
           <aside className="overflow-y-auto border-r border-haze bg-pit p-3">
@@ -216,7 +257,7 @@ export default function Session({ params }: Route.ComponentProps) {
         <main className="flex flex-1 flex-col items-center justify-center gap-4 px-6">
           <AlertCircle className="h-8 w-8 text-error" />
           <p className="text-sm text-error">
-            Extraction failed. Please try again.
+            {session.errorMessage ?? "Extraction failed. Please try again."}
           </p>
           <a
             href="/"

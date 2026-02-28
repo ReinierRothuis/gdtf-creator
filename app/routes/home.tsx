@@ -1,8 +1,11 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router";
+import { useMutation } from "convex/react";
 import { Upload, FileText, Zap, Download } from "lucide-react";
 import type { Route } from "./+types/home";
 import { Topbar } from "~/components/topbar";
+import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -24,19 +27,44 @@ export default function Home() {
   const navigate = useNavigate();
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const createSession = useMutation(api.sessions.createSession);
+  const generateUploadUrl = useMutation(api.sessions.generateUploadUrl);
+  const savePdf = useMutation(api.sessions.savePdf);
 
   const handleFile = useCallback(
-    (file: File) => {
+    async (file: File) => {
       if (!isPdf(file)) return;
       setIsProcessing(true);
-      // Simulate session creation — in production this uploads to Convex
-      // and returns a session ID
-      const sessionId = crypto.randomUUID().slice(0, 8);
-      setTimeout(() => {
+      setError(null);
+
+      try {
+        const sessionId = await createSession();
+        const uploadUrl = await generateUploadUrl();
+
+        const uploadResponse = await fetch(uploadUrl, {
+          method: "POST",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error("Failed to upload PDF");
+        }
+
+        const { storageId } = (await uploadResponse.json()) as {
+          storageId: Id<"_storage">;
+        };
+        await savePdf({ sessionId, storageId });
+
         navigate(`/session/${sessionId}`);
-      }, 800);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Upload failed");
+        setIsProcessing(false);
+      }
     },
-    [navigate]
+    [navigate, createSession, generateUploadUrl, savePdf]
   );
 
   const handleDrop = useCallback(
@@ -64,7 +92,10 @@ export default function Home() {
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(false);
+    // Only clear when actually leaving the container, not entering a child
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragging(false);
+    }
   }, []);
 
   const handleInputChange = useCallback(
@@ -76,8 +107,28 @@ export default function Home() {
   );
 
   return (
-    <div className="flex min-h-screen flex-col bg-void">
+    <div
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      className={`flex min-h-screen flex-col transition-colors duration-150 ${
+        isDragging ? "bg-cyan-dim" : "bg-void"
+      }`}
+    >
       <Topbar />
+
+      {/* Full-screen drag overlay */}
+      {isDragging && (
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center border-2 border-dashed border-cyan">
+          <div className="flex flex-col items-center gap-3">
+            <Upload className="h-12 w-12 text-cyan" />
+            <p className="text-lg font-bold text-cyan">
+              Drop .pdf to upload
+            </p>
+          </div>
+        </div>
+      )}
 
       <main className="flex flex-1 flex-col items-center justify-center px-6 py-16">
         {/* Hero */}
@@ -94,20 +145,12 @@ export default function Home() {
         </div>
 
         {/* Upload zone */}
-        <div
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onDragEnter={handleDragEnter}
-          onDragLeave={handleDragLeave}
-          className="w-full max-w-lg"
-        >
+        <div className="w-full max-w-lg">
           <label
             className={`group flex cursor-pointer flex-col items-center gap-4 border border-dashed p-12 transition-colors duration-150 ${
               isProcessing
                 ? "pointer-events-none opacity-40"
-                : isDragging
-                  ? "border-cyan bg-cyan-dim"
-                  : "border-haze bg-pit hover:border-cyan hover:bg-cyan-dim"
+                : "border-haze bg-pit hover:border-cyan hover:bg-cyan-dim"
             }`}
           >
             <input
@@ -128,7 +171,7 @@ export default function Home() {
                     />
                   ))}
                 </div>
-                <p className="text-sm text-cyan">Creating session...</p>
+                <p className="text-sm text-cyan">Uploading & creating session...</p>
               </>
             ) : (
               <>
@@ -142,6 +185,10 @@ export default function Home() {
             )}
           </label>
         </div>
+
+        {error && (
+          <p className="mt-4 text-sm text-error">{error}</p>
+        )}
 
         {/* How it works */}
         <div className="mt-16 grid w-full max-w-2xl grid-cols-3 gap-px bg-haze">

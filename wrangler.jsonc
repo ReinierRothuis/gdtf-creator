@@ -8,7 +8,8 @@
 	"compatibility_date": "2025-04-04",
 	"main": "./workers/app.ts",
 	"vars": {
-		"VALUE_FROM_CLOUDFLARE": "Hello from Cloudflare"
+		"CONVEX_URL": "https://cheery-pigeon-791.eu-west-1.convex.cloud",
+		"CONVEX_SITE_URL": "https://cheery-pigeon-791.eu-west-1.convex.site"
 	},
 	"observability": {
 		"enabled": true

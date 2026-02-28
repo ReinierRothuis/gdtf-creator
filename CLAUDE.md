@@ -41,3 +41,12 @@ See [DESIGN.md](./DESIGN.md) for the full design specification including:
 - OKLCH surface scale and accent colors
 - Typography rules and component patterns
 - Brutalist "dark venue" design philosophy
+
+## GDTF Specification
+
+When working on GDTF XML generation (`convex/gdtf.ts`) or validating output, refer to the official spec files:
+
+- **Full spec:** `https://raw.githubusercontent.com/mvrdevelopment/spec/main/gdtf-spec.md`
+- **Attribute definitions:** `https://raw.githubusercontent.com/mvrdevelopment/spec/refs/heads/main/gdtf_attributes_with_description.json`
+
+These files are large. Use `WebFetch` with a targeted prompt to extract only the section you need (e.g., "Find the DMXChannel attributes table" or "List all attributes in the Dimmer feature group").

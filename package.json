@@ -12,11 +12,16 @@
 		"typecheck": "npm run cf-typegen && react-router typegen && tsc -b"
 	},
 	"dependencies": {
+		"@ai-sdk/anthropic": "^3.0.50",
+		"ai": "^6.0.105",
+		"convex": "^1.32.0",
 		"isbot": "^5.1.31",
+		"jszip": "^3.10.1",
 		"lucide-react": "^0.575.0",
 		"react": "^19.1.1",
 		"react-dom": "^19.1.1",
-		"react-router": "^7.10.0"
+		"react-router": "^7.10.0",
+		"zod": "^4.3.6"
 	},
 	"devDependencies": {
 		"@cloudflare/vite-plugin": "^1.13.5",
