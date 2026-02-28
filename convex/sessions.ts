@@ -53,10 +53,12 @@ export const storeFixtureData = internalMutation({
   args: {
     sessionId: v.id("sessions"),
     fixtureData: v.any(),
+    extractionStats: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.sessionId, {
       fixtureData: args.fixtureData,
+      extractionStats: args.extractionStats,
       status: "complete",
     });
   },

@@ -93,6 +93,17 @@ export default defineSchema({
     fixtureData: v.optional(fixtureData),
     gdtfStorageId: v.optional(v.id("_storage")),
     errorMessage: v.optional(v.string()),
+    extractionStats: v.optional(
+      v.object({
+        promptTokens: v.number(),
+        completionTokens: v.number(),
+        totalTokens: v.number(),
+        extractionDurationMs: v.number(),
+        modelId: v.string(),
+        finishReason: v.string(),
+        pdfSizeBytes: v.number(),
+      })
+    ),
     createdAt: v.number(),
   }),
 });

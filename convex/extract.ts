@@ -26,6 +26,8 @@ export const extractFixtureData = internalAction({
 
       const pdfResponse = await fetch(pdfUrl);
       const pdfBuffer = await pdfResponse.arrayBuffer();
+      const pdfSizeBytes = pdfBuffer.byteLength;
+      const startTime = Date.now();
 
       const result = await generateText({
         model: anthropic("claude-sonnet-4-5-20250929"),
@@ -243,9 +245,20 @@ Be thorough: extract ALL DMX modes and ALL channels in each mode. If a default v
         throw new Error("No structured output returned from LLM");
       }
 
+      const extractionStats = {
+        promptTokens: result.usage.inputTokens ?? 0,
+        completionTokens: result.usage.outputTokens ?? 0,
+        totalTokens: result.usage.totalTokens ?? 0,
+        extractionDurationMs: Date.now() - startTime,
+        modelId: result.response.modelId,
+        finishReason: result.finishReason,
+        pdfSizeBytes,
+      };
+
       await ctx.runMutation(internal.sessions.storeFixtureData, {
         sessionId: args.sessionId,
         fixtureData,
+        extractionStats,
       });
     } catch (error) {
       const message =
