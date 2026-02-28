@@ -19,6 +19,10 @@ function generateUuid(): string {
     .toUpperCase();
 }
 
+function sanitizeName(name: string): string {
+  return name.replace(/[^A-Za-z0-9_.-]/g, "_");
+}
+
 function getFeatureForAttribute(attrName: string): string {
   if (attrName === "Dimmer") return "Dimmer.Dimmer";
   if (attrName.startsWith("Pan") || attrName.startsWith("Tilt"))
@@ -49,7 +53,7 @@ const IDENTITY_MATRIX =
   "{1.000000,0.000000,0.000000,0.000000}" +
   "{0.000000,1.000000,0.000000,0.000000}" +
   "{0.000000,0.000000,1.000000,0.000000}" +
-  "{0,0,0,1}";
+  "{0.000000,0.000000,0.000000,1.000000}";
 
 /**
  * A resolved channel merges coarse+fine into a single DMXChannel
@@ -149,29 +153,29 @@ export function generateDescriptionXml(fixture: FixtureData): string {
   lines.push(`<?xml version="1.0" encoding="UTF-8"?>`);
   lines.push(`<GDTF DataVersion="1.2">`);
   lines.push(
-    `  <FixtureType Name="${escapeXml(fixture.name)}" ShortName="${escapeXml(fixture.shortName)}" LongName="${escapeXml(fixture.name)}" Manufacturer="${escapeXml(fixture.manufacturer)}" Description="" FixtureTypeID="${fixtureTypeId}" CanHaveChildren="No" RefFT="">`
+    `  <FixtureType Name="${escapeXml(sanitizeName(fixture.name))}" ShortName="${escapeXml(fixture.shortName)}" LongName="${escapeXml(fixture.name)}" Manufacturer="${escapeXml(fixture.manufacturer)}" Description="" FixtureTypeID="${fixtureTypeId}" CanHaveChildren="No" RefFT="">`
   );
 
   // Attribute Definitions
   lines.push(`    <AttributeDefinitions>`);
   lines.push(`      <ActivationGroups/>`);
   lines.push(`      <FeatureGroups>`);
-  lines.push(`        <FeatureGroup Name="Dimmer" Pretty="">`);
+  lines.push(`        <FeatureGroup Name="Dimmer" Pretty="Dimmer">`);
   lines.push(`          <Feature Name="Dimmer"/>`);
   lines.push(`        </FeatureGroup>`);
-  lines.push(`        <FeatureGroup Name="Position" Pretty="">`);
+  lines.push(`        <FeatureGroup Name="Position" Pretty="Position">`);
   lines.push(`          <Feature Name="Position"/>`);
   lines.push(`        </FeatureGroup>`);
-  lines.push(`        <FeatureGroup Name="Color" Pretty="">`);
+  lines.push(`        <FeatureGroup Name="Color" Pretty="Color">`);
   lines.push(`          <Feature Name="Color"/>`);
   lines.push(`        </FeatureGroup>`);
-  lines.push(`        <FeatureGroup Name="Gobo" Pretty="">`);
+  lines.push(`        <FeatureGroup Name="Gobo" Pretty="Gobo">`);
   lines.push(`          <Feature Name="Gobo"/>`);
   lines.push(`        </FeatureGroup>`);
-  lines.push(`        <FeatureGroup Name="Beam" Pretty="">`);
+  lines.push(`        <FeatureGroup Name="Beam" Pretty="Beam">`);
   lines.push(`          <Feature Name="Beam"/>`);
   lines.push(`        </FeatureGroup>`);
-  lines.push(`        <FeatureGroup Name="Control" Pretty="">`);
+  lines.push(`        <FeatureGroup Name="Control" Pretty="Control">`);
   lines.push(`          <Feature Name="Control"/>`);
   lines.push(`        </FeatureGroup>`);
   lines.push(`      </FeatureGroups>`);
@@ -192,7 +196,7 @@ export function generateDescriptionXml(fixture: FixtureData): string {
 
   // PhysicalDescriptions
   lines.push(`    <PhysicalDescriptions>`);
-  lines.push(`      <ColorSpace Name="" Mode="sRGB"/>`);
+  lines.push(`      <ColorSpace Name="Default" Mode="sRGB"/>`);
   lines.push(`      <AdditionalColorSpaces/>`);
   lines.push(`      <Gamuts/>`);
   lines.push(`      <Filters/>`);
@@ -211,13 +215,16 @@ export function generateDescriptionXml(fixture: FixtureData): string {
   lines.push(`      </Properties>`);
   lines.push(`    </PhysicalDescriptions>`);
 
+  // Models
+  lines.push(`    <Models/>`);
+
   // Geometries
   lines.push(`    <Geometries>`);
   lines.push(
-    `      <Geometry Name="${geometryName}" Position="${IDENTITY_MATRIX}" Model="">`
+    `      <Geometry Name="${geometryName}" Position="${IDENTITY_MATRIX}">`
   );
   lines.push(
-    `        <Beam Name="Beam" Model="" Position="${IDENTITY_MATRIX}" LampType="Discharge" PowerConsumption="${parsePower(fixture.physical.powerConsumption)}" LuminousFlux="10000.000000" ColorTemperature="6000.000000" BeamAngle="25.000000" BeamRadius="0.050000" FieldAngle="25.000000" BeamType="Wash" ColorRenderingIndex="100"/>`
+    `        <Beam Name="Beam" Position="${IDENTITY_MATRIX}" LampType="Discharge" PowerConsumption="${parsePower(fixture.physical.powerConsumption)}" LuminousFlux="10000.000000" ColorTemperature="6000.000000" BeamAngle="25.000000" BeamRadius="0.050000" FieldAngle="25.000000" BeamType="Wash" ColorRenderingIndex="100"/>`
   );
   lines.push(`      </Geometry>`);
   lines.push(`    </Geometries>`);
@@ -237,8 +244,12 @@ export function generateDescriptionXml(fixture: FixtureData): string {
       const cfName = `${attrName} 1`;
       const initialFn = `${channelNodeName}.${attrName}.${cfName}`;
       const offsetStr = ch.offsets.join(",");
-      const defaultVal = `${Math.round(ch.defaultValue)}/1`;
-      const highlight = attrName === "Dimmer" ? "255/1" : "0/1";
+      const byteCount = ch.offsets.length;
+      const defaultVal = `${Math.round(ch.defaultValue)}/${byteCount}`;
+      const feature = getFeatureForAttribute(attrName);
+      let highlight = "None";
+      if (attrName === "Dimmer") highlight = `255/${byteCount}`;
+      else if (feature === "Color.Color") highlight = `255/${byteCount}`;
 
       lines.push(
         `          <DMXChannel DMXBreak="1" Offset="${offsetStr}" Highlight="${highlight}" Geometry="${geometryName}" InitialFunction="${escapeXml(initialFn)}">`
@@ -247,7 +258,7 @@ export function generateDescriptionXml(fixture: FixtureData): string {
         `            <LogicalChannel Attribute="${escapeXml(attrName)}" Snap="No" Master="${attrName === "Dimmer" ? "Grand" : "None"}" MibFade="0.000000" DMXChangeTimeLimit="0.000000">`
       );
       lines.push(
-        `              <ChannelFunction Name="${escapeXml(cfName)}" Default="${defaultVal}" DMXFrom="0/1" PhysicalFrom="0.000000" PhysicalTo="1.000000" RealFade="0.000000" RealAcceleration="0.000000" Min="0.000000" Max="0.000000" CustomName="" OriginalAttribute="" Attribute="${escapeXml(attrName)}"/>`
+        `              <ChannelFunction Name="${escapeXml(cfName)}" Default="${defaultVal}" DMXFrom="0/${byteCount}" PhysicalFrom="0.000000" PhysicalTo="1.000000" RealFade="0.000000" RealAcceleration="0.000000" Min="0.000000" Max="1.000000" CustomName="" OriginalAttribute="" Attribute="${escapeXml(attrName)}"/>`
       );
       lines.push(`            </LogicalChannel>`);
       lines.push(`          </DMXChannel>`);
@@ -260,6 +271,9 @@ export function generateDescriptionXml(fixture: FixtureData): string {
   }
 
   lines.push(`    </DMXModes>`);
+  lines.push(`    <Revisions/>`);
+  lines.push(`    <FTPresets/>`);
+  lines.push(`    <Protocols/>`);
 
   lines.push(`  </FixtureType>`);
   lines.push(`</GDTF>`);

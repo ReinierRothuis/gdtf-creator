@@ -24,7 +24,8 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(test:*)",
       "Bash(gh api:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(npx convex dev:*)"
     ]
   }
 }
