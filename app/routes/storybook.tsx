@@ -44,14 +44,25 @@ const MOCK_DMX_MODE: DmxMode = {
   name: "Standard",
   channelCount: 12,
   channels: [
-    { channel: 1, gdtfAttribute: "Dimmer", prettyName: "Dimmer", defaultValue: 0 },
+    {
+      channel: 1,
+      gdtfAttribute: "Dimmer",
+      prettyName: "Dimmer",
+      defaultValue: 0,
+    },
     {
       channel: 2,
       gdtfAttribute: "Pan",
       prettyName: "Pan",
       defaultValue: 128,
       functions: [
-        { name: "Pan", dmxFrom: 0, dmxTo: 255, physicalFrom: 0, physicalTo: 540 },
+        {
+          name: "Pan",
+          dmxFrom: 0,
+          dmxTo: 255,
+          physicalFrom: 0,
+          physicalTo: 540,
+        },
       ],
     },
     {
@@ -60,7 +71,13 @@ const MOCK_DMX_MODE: DmxMode = {
       prettyName: "Tilt",
       defaultValue: 128,
       functions: [
-        { name: "Tilt", dmxFrom: 0, dmxTo: 255, physicalFrom: -130, physicalTo: 130 },
+        {
+          name: "Tilt",
+          dmxFrom: 0,
+          dmxTo: 255,
+          physicalFrom: -130,
+          physicalTo: 130,
+        },
       ],
     },
     {
@@ -81,7 +98,14 @@ const MOCK_DMX_MODE: DmxMode = {
         prettyName: "Red",
         defaultValue: 255,
         functions: [
-          { name: "Red", dmxFrom: 0, dmxTo: 255, attribute: "ColorAdd_R", physicalFrom: 0, physicalTo: 100 },
+          {
+            name: "Red",
+            dmxFrom: 0,
+            dmxTo: 255,
+            attribute: "ColorAdd_R",
+            physicalFrom: 0,
+            physicalTo: 100,
+          },
         ],
       },
       { gdtfAttribute: "ColorAdd_G", prettyName: "Green", defaultValue: 255 },
@@ -216,10 +240,17 @@ export default function Storybook() {
                     </span>
                     <div className="mt-2 grid grid-cols-5 gap-px bg-haze">
                       {SURFACE_COLORS.map((c) => (
-                        <div key={c.name} className="flex flex-col gap-1 bg-deck p-3">
+                        <div
+                          key={c.name}
+                          className="flex flex-col gap-1 bg-deck p-3"
+                        >
                           <div className={`h-10 border border-haze ${c.css}`} />
-                          <span className="text-xs font-bold text-flood">{c.name}</span>
-                          <span className="text-[10px] text-wash">{c.value}</span>
+                          <span className="text-xs font-bold text-flood">
+                            {c.name}
+                          </span>
+                          <span className="text-[10px] text-wash">
+                            {c.value}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -231,10 +262,17 @@ export default function Storybook() {
                     </span>
                     <div className="mt-2 grid grid-cols-4 gap-px bg-haze">
                       {ACCENT_COLORS.map((c) => (
-                        <div key={c.name} className="flex flex-col gap-1 bg-deck p-3">
+                        <div
+                          key={c.name}
+                          className="flex flex-col gap-1 bg-deck p-3"
+                        >
                           <div className={`h-10 border border-haze ${c.css}`} />
-                          <span className="text-xs font-bold text-flood">{c.name}</span>
-                          <span className="text-[10px] text-wash">{c.value}</span>
+                          <span className="text-xs font-bold text-flood">
+                            {c.name}
+                          </span>
+                          <span className="text-[10px] text-wash">
+                            {c.value}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -246,10 +284,17 @@ export default function Storybook() {
                     </span>
                     <div className="mt-2 grid grid-cols-4 gap-px bg-haze">
                       {ACCENT_DIM_COLORS.map((c) => (
-                        <div key={c.name} className="flex flex-col gap-1 bg-deck p-3">
+                        <div
+                          key={c.name}
+                          className="flex flex-col gap-1 bg-deck p-3"
+                        >
                           <div className={`h-10 border border-haze ${c.css}`} />
-                          <span className="text-xs font-bold text-flood">{c.name}</span>
-                          <span className="text-[10px] text-wash">{c.value}</span>
+                          <span className="text-xs font-bold text-flood">
+                            {c.name}
+                          </span>
+                          <span className="text-[10px] text-wash">
+                            {c.value}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -261,10 +306,17 @@ export default function Storybook() {
                     </span>
                     <div className="mt-2 grid grid-cols-4 gap-px bg-haze">
                       {SEMANTIC_COLORS.map((c) => (
-                        <div key={c.name} className="flex flex-col gap-1 bg-deck p-3">
+                        <div
+                          key={c.name}
+                          className="flex flex-col gap-1 bg-deck p-3"
+                        >
                           <div className={`h-10 border border-haze ${c.css}`} />
-                          <span className="text-xs font-bold text-flood">{c.name}</span>
-                          <span className="text-[10px] text-wash">{c.value}</span>
+                          <span className="text-xs font-bold text-flood">
+                            {c.name}
+                          </span>
+                          <span className="text-[10px] text-wash">
+                            {c.value}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -279,15 +331,47 @@ export default function Storybook() {
                 <div className="flex flex-col gap-4">
                   <PropsTable
                     rows={[
-                      ["Display", "font-mono text-3xl font-bold tracking-tight", "30px / 36px"],
-                      ["Page title", "font-mono text-xl font-bold tracking-tight", "20px / 28px"],
-                      ["Section heading", "font-mono text-base font-bold uppercase tracking-widest", "16px / 24px"],
-                      ["Panel label", "font-mono text-xs font-medium uppercase tracking-widest", "12px / 16px"],
+                      [
+                        "Display",
+                        "font-mono text-3xl font-bold tracking-tight",
+                        "30px / 36px",
+                      ],
+                      [
+                        "Page title",
+                        "font-mono text-xl font-bold tracking-tight",
+                        "20px / 28px",
+                      ],
+                      [
+                        "Section heading",
+                        "font-mono text-base font-bold uppercase tracking-widest",
+                        "16px / 24px",
+                      ],
+                      [
+                        "Panel label",
+                        "font-mono text-xs font-medium uppercase tracking-widest",
+                        "12px / 16px",
+                      ],
                       ["Body", "font-mono text-sm font-normal", "14px / 20px"],
-                      ["Body prose", "font-sans text-sm font-normal", "14px / 20px"],
-                      ["Caption", "font-mono text-xs font-normal", "12px / 16px"],
-                      ["DMX value", "font-mono text-sm font-bold tabular-nums", "14px / 20px"],
-                      ["Channel address", "font-mono text-xs font-bold tabular-nums", "12px / 16px"],
+                      [
+                        "Body prose",
+                        "font-sans text-sm font-normal",
+                        "14px / 20px",
+                      ],
+                      [
+                        "Caption",
+                        "font-mono text-xs font-normal",
+                        "12px / 16px",
+                      ],
+                      [
+                        "DMX value",
+                        "font-mono text-sm font-bold tabular-nums",
+                        "14px / 20px",
+                      ],
+                      [
+                        "Channel address",
+                        "font-mono text-xs font-bold tabular-nums",
+                        "12px / 16px",
+                      ],
                     ]}
                     headers={["Role", "Classes", "Size"]}
                   />
@@ -331,10 +415,26 @@ export default function Storybook() {
                 <div className="flex flex-col gap-4">
                   <PropsTable
                     rows={[
-                      ["Primary", "bg-cyan text-void", "Main actions (Export, Save)"],
-                      ["Secondary", "border-haze bg-transparent text-flood", "Secondary actions (Add, Edit)"],
-                      ["Ghost", "bg-transparent text-spot text-xs", "Inline actions (Remove, Cancel)"],
-                      ["Danger", "border-error text-error", "Destructive actions (Delete)"],
+                      [
+                        "Primary",
+                        "bg-cyan text-void",
+                        "Main actions (Export, Save)",
+                      ],
+                      [
+                        "Secondary",
+                        "border-haze bg-transparent text-flood",
+                        "Secondary actions (Add, Edit)",
+                      ],
+                      [
+                        "Ghost",
+                        "bg-transparent text-spot text-xs",
+                        "Inline actions (Remove, Cancel)",
+                      ],
+                      [
+                        "Danger",
+                        "border-error text-error",
+                        "Destructive actions (Delete)",
+                      ],
                     ]}
                     headers={["Variant", "Key classes", "Usage"]}
                   />
@@ -407,9 +507,21 @@ export default function Storybook() {
                 <div className="flex flex-col gap-4">
                   <PropsTable
                     rows={[
-                      ["Text", "input[type=text]", "bg-pit border-haze focus:border-cyan"],
-                      ["Select", "select", "appearance-none bg-pit border-haze"],
-                      ["Checkbox", "custom div", "w-4 h-4 border, inner bg-cyan"],
+                      [
+                        "Text",
+                        "input[type=text]",
+                        "bg-pit border-haze focus:border-cyan",
+                      ],
+                      [
+                        "Select",
+                        "select",
+                        "appearance-none bg-pit border-haze",
+                      ],
+                      [
+                        "Checkbox",
+                        "custom div",
+                        "w-4 h-4 border, inner bg-cyan",
+                      ],
                     ]}
                     headers={["Type", "Element", "Key classes"]}
                   />
@@ -491,8 +603,18 @@ export default function Storybook() {
                   <PropsTable
                     rows={[
                       ["title", "string", "(required)", "Panel heading text"],
-                      ["children", "ReactNode", "(required)", "Panel body content"],
-                      ["actions", "ReactNode", "undefined", "Right-aligned header slot"],
+                      [
+                        "children",
+                        "ReactNode",
+                        "(required)",
+                        "Panel body content",
+                      ],
+                      [
+                        "actions",
+                        "ReactNode",
+                        "undefined",
+                        "Right-aligned header slot",
+                      ],
                     ]}
                     headers={["Prop", "Type", "Default", "Description"]}
                   />
@@ -503,7 +625,8 @@ export default function Storybook() {
                     </span>
                     <Panel title="Basic Panel">
                       <p className="text-sm text-flood">
-                        Panel content renders here. Bordered container on the deck surface.
+                        Panel content renders here. Bordered container on the
+                        deck surface.
                       </p>
                     </Panel>
 
@@ -519,7 +642,8 @@ export default function Storybook() {
                       }
                     >
                       <p className="text-sm text-flood">
-                        The actions slot renders in the panel header, right-aligned.
+                        The actions slot renders in the panel header,
+                        right-aligned.
                       </p>
                     </Panel>
                   </div>
@@ -535,7 +659,12 @@ export default function Storybook() {
                     rows={[
                       ["label", "string", "(required)", "Label text"],
                       ["value", "string", "(required)", "Display value"],
-                      ["mono", "boolean", "true", "Use tabular-nums (mono) or font-sans"],
+                      [
+                        "mono",
+                        "boolean",
+                        "true",
+                        "Use tabular-nums (mono) or font-sans",
+                      ],
                     ]}
                     headers={["Prop", "Type", "Default", "Description"]}
                   />
@@ -553,8 +682,16 @@ export default function Storybook() {
                       Sans-serif
                     </span>
                     <FieldRow>
-                      <Field label="Manufacturer" value="Martin Professional" mono={false} />
-                      <Field label="Name" value="MAC Encore Performance" mono={false} />
+                      <Field
+                        label="Manufacturer"
+                        value="Martin Professional"
+                        mono={false}
+                      />
+                      <Field
+                        label="Name"
+                        value="MAC Encore Performance"
+                        mono={false}
+                      />
                     </FieldRow>
                   </div>
                 </div>
@@ -574,7 +711,12 @@ export default function Storybook() {
                 <div className="flex flex-col gap-4">
                   <PropsTable
                     rows={[
-                      ["mode", "DmxMode", "(required)", "DMX mode with channels, functions, sub-fixtures"],
+                      [
+                        "mode",
+                        "DmxMode",
+                        "(required)",
+                        "DMX mode with channels, functions, sub-fixtures",
+                      ],
                     ]}
                     headers={["Prop", "Type", "Default", "Description"]}
                   />
@@ -589,8 +731,18 @@ export default function Storybook() {
                 <div className="flex flex-col gap-4">
                   <PropsTable
                     rows={[
-                      ["progress", "number", "(required)", "0–100 percentage value"],
-                      ["stage", "string", "(required)", "Current stage description"],
+                      [
+                        "progress",
+                        "number",
+                        "(required)",
+                        "0–100 percentage value",
+                      ],
+                      [
+                        "stage",
+                        "string",
+                        "(required)",
+                        "Current stage description",
+                      ],
                     ]}
                     headers={["Prop", "Type", "Default", "Description"]}
                   />
@@ -601,7 +753,10 @@ export default function Storybook() {
                         25% — Uploading
                       </span>
                       <div className="mt-3 flex justify-center">
-                        <ExtractionProgress progress={25} stage="Uploading PDF..." />
+                        <ExtractionProgress
+                          progress={25}
+                          stage="Uploading PDF..."
+                        />
                       </div>
                     </div>
                     <div className="border-t border-haze pt-6">
@@ -609,7 +764,10 @@ export default function Storybook() {
                         65% — Extracting
                       </span>
                       <div className="mt-3 flex justify-center">
-                        <ExtractionProgress progress={65} stage="Extracting fixture data with AI..." />
+                        <ExtractionProgress
+                          progress={65}
+                          stage="Extracting fixture data with AI..."
+                        />
                       </div>
                     </div>
                   </div>
@@ -623,7 +781,12 @@ export default function Storybook() {
                 <div className="flex flex-col gap-4">
                   <PropsTable
                     rows={[
-                      ["number", "string", "(required)", "Step number (e.g. '01')"],
+                      [
+                        "number",
+                        "string",
+                        "(required)",
+                        "Step number (e.g. '01')",
+                      ],
                       ["label", "string", "(required)", "Step label"],
                       ["active", "boolean", "false", "Active/current step"],
                       ["done", "boolean", "false", "Completed step"],
@@ -662,23 +825,32 @@ export default function Storybook() {
                 <div className="flex flex-col gap-4">
                   <PropsTable
                     rows={[
-                      ["blobCount", "number", "4", "Number of gradient blobs"],
-                      ["opacity", "number", "0.15", "Overall canvas opacity"],
-                      ["colors", "AccentColor[]", '["cyan","magenta","amber","uv"]', "Accent colors to use"],
-                      ["speed", "number", "1", "Animation speed multiplier"],
-                      ["contained", "boolean", "false", "Use absolute instead of fixed positioning"],
+                      [
+                        "opacity",
+                        "number",
+                        "0.15",
+                        "Container opacity (controls visibility)",
+                      ],
+                      [
+                        "contained",
+                        "boolean",
+                        "false",
+                        "Use absolute instead of fixed positioning",
+                      ],
                     ]}
                     headers={["Prop", "Type", "Default", "Description"]}
                   />
 
                   <div className="flex flex-col gap-3">
                     <span className="text-xs font-bold uppercase tracking-widest text-spot">
-                      Default (all colors, opacity 0.15)
+                      Default (opacity 0.15)
                     </span>
                     <div className="relative h-64 overflow-hidden border border-haze bg-void">
-                      <Background contained />
+                      <Background distance={1} contained />
                       <div className="relative flex h-full items-center justify-center">
-                        <span className="text-sm text-flood">Default — all four accent colors</span>
+                        <span className="text-sm text-flood">
+                          Default — subtle shader gradient
+                        </span>
                       </div>
                     </div>
 
@@ -686,19 +858,23 @@ export default function Storybook() {
                       High opacity (0.4)
                     </span>
                     <div className="relative h-64 overflow-hidden border border-haze bg-void">
-                      <Background opacity={0.4} contained />
+                      <Background distance={1} opacity={0.4} contained />
                       <div className="relative flex h-full items-center justify-center">
-                        <span className="text-sm text-flood">Opacity 0.4 — visible blobs</span>
+                        <span className="text-sm text-flood">
+                          Opacity 0.4 — visible gradient
+                        </span>
                       </div>
                     </div>
 
                     <span className="text-xs font-bold uppercase tracking-widest text-spot">
-                      Cyan + Magenta only
+                      Drag state (0.65)
                     </span>
                     <div className="relative h-64 overflow-hidden border border-haze bg-void">
-                      <Background colors={["cyan", "magenta"]} opacity={0.3} contained />
+                      <Background distance={1} opacity={0.65} contained />
                       <div className="relative flex h-full items-center justify-center">
-                        <span className="text-sm text-flood">Subset palette — cyan & magenta</span>
+                        <span className="text-sm text-flood">
+                          Opacity 0.65 — file drag feedback
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -712,11 +888,36 @@ export default function Storybook() {
                 <div className="flex flex-col gap-4">
                   <PropsTable
                     rows={[
-                      ["scan", "animate-scan", "3s linear infinite", "Scan-line overlay on loading states"],
-                      ["pulse-glow", "animate-pulse-glow", "2s ease-in-out infinite", "Breathing effect on active elements"],
-                      ["strobe", "animate-strobe", "0.15s steps(2) x3", "Flash confirmation on save/export"],
-                      ["waveform", "animate-waveform", "1.2s ease-in-out infinite", "Audio-meter bars for processing"],
-                      ["lightshow", "animate-lightshow", "2s ease-in-out infinite", "Stage cones tilting side-view to top-view"],
+                      [
+                        "scan",
+                        "animate-scan",
+                        "3s linear infinite",
+                        "Scan-line overlay on loading states",
+                      ],
+                      [
+                        "pulse-glow",
+                        "animate-pulse-glow",
+                        "2s ease-in-out infinite",
+                        "Breathing effect on active elements",
+                      ],
+                      [
+                        "strobe",
+                        "animate-strobe",
+                        "0.15s steps(2) x3",
+                        "Flash confirmation on save/export",
+                      ],
+                      [
+                        "waveform",
+                        "animate-waveform",
+                        "1.2s ease-in-out infinite",
+                        "Audio-meter bars for processing",
+                      ],
+                      [
+                        "lightshow",
+                        "animate-lightshow",
+                        "2s ease-in-out infinite",
+                        "Stage cones tilting side-view to top-view",
+                      ],
                     ]}
                     headers={["Name", "Class", "Timing", "Usage"]}
                   />
@@ -791,7 +992,8 @@ export default function Storybook() {
                               <div
                                 className="absolute inset-0"
                                 style={{
-                                  clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)",
+                                  clipPath:
+                                    "polygon(50% 0%, 0% 100%, 100% 100%)",
                                   background:
                                     "linear-gradient(to bottom, oklch(0.82 0.18 195), oklch(0.82 0.18 195 / 0.15))",
                                 }}
@@ -800,7 +1002,8 @@ export default function Storybook() {
                               <div
                                 className="absolute inset-0 animate-lightshow-glow"
                                 style={{
-                                  clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)",
+                                  clipPath:
+                                    "polygon(50% 0%, 0% 100%, 100% 100%)",
                                   background:
                                     "linear-gradient(to bottom, transparent 30%, oklch(0.82 0.18 195 / 0.8))",
                                   animationDelay: `${i * 0.15}s`,
@@ -873,10 +1076,7 @@ function PropsTable({
           }}
         >
           {row.map((cell, j) => (
-            <div
-              key={j}
-              className="bg-deck px-3 py-1.5 text-xs text-flood"
-            >
+            <div key={j} className="bg-deck px-3 py-1.5 text-xs text-flood">
               {cell}
             </div>
           ))}

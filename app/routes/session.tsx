@@ -10,6 +10,7 @@ import {
 import { useQuery, useAction } from "convex/react";
 import type { Route } from "./+types/session";
 import { Topbar } from "~/components/topbar";
+import { Background } from "~/components/background";
 import { Panel } from "~/components/panel";
 import { Field, FieldRow } from "~/components/field";
 import { DmxTable } from "~/components/dmx-table";
@@ -143,8 +144,9 @@ export default function Session({ params }: Route.ComponentProps) {
           </aside>
 
           {/* Content — progress */}
-          <main className="flex flex-col bg-void p-8">
-            <div className="mb-6">
+          <main className="relative flex flex-col bg-void p-8">
+            <Background opacity={0.3} contained />
+            <div className="relative z-10 mb-6">
               <h1 className="text-xl font-bold tracking-tight text-flood">
                 {status === "uploading" ? "Uploading" : "Extracting"}
               </h1>
@@ -155,7 +157,7 @@ export default function Session({ params }: Route.ComponentProps) {
               </p>
             </div>
 
-            <div className="flex flex-1 flex-col items-center justify-center">
+            <div className="relative z-10 flex flex-1 flex-col items-center justify-center">
               <ExtractionProgress
                 progress={status === "uploading" ? 5 : 50}
                 stage={

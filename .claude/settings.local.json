@@ -30,7 +30,9 @@
       "WebFetch(domain:blenderdmx.eu)",
       "Bash(ls:*)",
       "Bash(pnpm remove:*)",
-      "WebFetch(domain:ai.google.dev)"
+      "WebFetch(domain:ai.google.dev)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:shadergradient.co)"
     ]
   }
 }
