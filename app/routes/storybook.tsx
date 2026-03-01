@@ -4,6 +4,7 @@ import { Panel } from "~/components/panel";
 import { Field, FieldRow } from "~/components/field";
 import { DmxTable } from "~/components/dmx-table";
 import { ExtractionProgress } from "~/components/extraction-progress";
+import { Background } from "~/components/background";
 import type { DmxMode } from "../../convex/schema/fixture";
 
 // ---------------------------------------------------------------------------
@@ -31,6 +32,7 @@ const SECTIONS = [
   { id: "dmx-table", label: "DmxTable" },
   { id: "extraction-progress", label: "Progress" },
   { id: "step-badge", label: "StepBadge" },
+  { id: "background", label: "Background" },
   { id: "animations", label: "Animations" },
 ] as const;
 
@@ -648,6 +650,56 @@ export default function Storybook() {
                       <StepBadge number="02" label="Extract" done />
                       <div className="h-px w-6 bg-cyan" />
                       <StepBadge number="03" label="Export" active />
+                    </div>
+                  </div>
+                </div>
+              </Panel>
+            </section>
+
+            {/* ---- Background ---- */}
+            <section id="background">
+              <Panel title="Background">
+                <div className="flex flex-col gap-4">
+                  <PropsTable
+                    rows={[
+                      ["blobCount", "number", "4", "Number of gradient blobs"],
+                      ["opacity", "number", "0.15", "Overall canvas opacity"],
+                      ["colors", "AccentColor[]", '["cyan","magenta","amber","uv"]', "Accent colors to use"],
+                      ["speed", "number", "1", "Animation speed multiplier"],
+                      ["contained", "boolean", "false", "Use absolute instead of fixed positioning"],
+                    ]}
+                    headers={["Prop", "Type", "Default", "Description"]}
+                  />
+
+                  <div className="flex flex-col gap-3">
+                    <span className="text-xs font-bold uppercase tracking-widest text-spot">
+                      Default (all colors, opacity 0.15)
+                    </span>
+                    <div className="relative h-64 overflow-hidden border border-haze bg-void">
+                      <Background contained />
+                      <div className="relative flex h-full items-center justify-center">
+                        <span className="text-sm text-flood">Default — all four accent colors</span>
+                      </div>
+                    </div>
+
+                    <span className="text-xs font-bold uppercase tracking-widest text-spot">
+                      High opacity (0.4)
+                    </span>
+                    <div className="relative h-64 overflow-hidden border border-haze bg-void">
+                      <Background opacity={0.4} contained />
+                      <div className="relative flex h-full items-center justify-center">
+                        <span className="text-sm text-flood">Opacity 0.4 — visible blobs</span>
+                      </div>
+                    </div>
+
+                    <span className="text-xs font-bold uppercase tracking-widest text-spot">
+                      Cyan + Magenta only
+                    </span>
+                    <div className="relative h-64 overflow-hidden border border-haze bg-void">
+                      <Background colors={["cyan", "magenta"]} opacity={0.3} contained />
+                      <div className="relative flex h-full items-center justify-center">
+                        <span className="text-sm text-flood">Subset palette — cyan & magenta</span>
+                      </div>
                     </div>
                   </div>
                 </div>

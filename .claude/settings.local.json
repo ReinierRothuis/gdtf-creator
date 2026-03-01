@@ -27,7 +27,10 @@
       "Bash(curl:*)",
       "Bash(npx convex dev:*)",
       "WebFetch(domain:gdtf-share.com)",
-      "WebFetch(domain:blenderdmx.eu)"
+      "WebFetch(domain:blenderdmx.eu)",
+      "Bash(ls:*)",
+      "Bash(pnpm remove:*)",
+      "WebFetch(domain:ai.google.dev)"
     ]
   }
 }
