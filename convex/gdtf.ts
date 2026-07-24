@@ -27,8 +27,16 @@ function sanitizeName(name: string): string {
   return name.replace(/[^A-Za-z0-9_.-]/g, "_");
 }
 
+function channelFunctionName(name: string, index: number): string {
+  return `${sanitizeName(name)}_${index + 1}`;
+}
+
+function isDimmerAttribute(attrName: string): boolean {
+  return /^Dimmer\d*$/.test(attrName);
+}
+
 function getFeatureForAttribute(attrName: string): string {
-  if (attrName === "Dimmer") return "Dimmer.Dimmer";
+  if (isDimmerAttribute(attrName)) return "Dimmer.Dimmer";
   if (attrName.startsWith("Pan") || attrName.startsWith("Tilt"))
     return "Position.Position";
   if (
@@ -71,62 +79,33 @@ interface ResolvedChannel {
   functions?: ChannelFunction[];
 }
 
-/**
- * Merge fine/coarse channel pairs that share the same gdtfAttribute.
- * - 1 occurrence -> single-byte channel
- * - 2 occurrences -> coarse+fine pair (16-bit), merged into one DMXChannel
- * - 3+ occurrences -> first two merged, rest get suffixed attribute names
- */
+/** Merge only explicitly linked coarse/fine channels. */
 function resolveChannels(channels: DmxChannel[]): ResolvedChannel[] {
-  const attrGroups = new Map<string, DmxChannel[]>();
-  for (const ch of channels) {
-    const group = attrGroups.get(ch.gdtfAttribute) ?? [];
-    group.push(ch);
-    attrGroups.set(ch.gdtfAttribute, group);
-  }
-
+  const fineByCoarse = new Map(
+    channels
+      .filter((channel) => channel.fineOf !== undefined)
+      .map((channel) => [channel.fineOf!, channel])
+  );
+  const usedAttributes = new Set<string>();
   const resolved: ResolvedChannel[] = [];
-  const seen = new Set<string>();
 
-  for (const ch of channels) {
-    if (seen.has(ch.gdtfAttribute)) continue;
-    seen.add(ch.gdtfAttribute);
-
-    const group = attrGroups.get(ch.gdtfAttribute)!;
-    if (group.length === 1) {
-      resolved.push({
-        attribute: ch.gdtfAttribute,
-        prettyName: ch.prettyName,
-        offsets: [ch.channel],
-        defaultValue: ch.defaultValue,
-        functions: ch.functions,
-      });
-    } else if (group.length === 2) {
-      resolved.push({
-        attribute: ch.gdtfAttribute,
-        prettyName: group[0].prettyName,
-        offsets: [group[0].channel, group[1].channel],
-        defaultValue: group[0].defaultValue,
-        functions: group[0].functions,
-      });
-    } else {
-      resolved.push({
-        attribute: ch.gdtfAttribute,
-        prettyName: group[0].prettyName,
-        offsets: [group[0].channel, group[1].channel],
-        defaultValue: group[0].defaultValue,
-        functions: group[0].functions,
-      });
-      for (let i = 2; i < group.length; i++) {
-        resolved.push({
-          attribute: `${ch.gdtfAttribute}${i + 1}`,
-          prettyName: group[i].prettyName,
-          offsets: [group[i].channel],
-          defaultValue: group[i].defaultValue,
-          functions: group[i].functions,
-        });
-      }
+  for (const channel of channels) {
+    if (channel.fineOf !== undefined) continue;
+    let attribute = channel.gdtfAttribute;
+    for (let suffix = 2; usedAttributes.has(attribute); suffix++) {
+      attribute = `${channel.gdtfAttribute}${suffix}`;
     }
+    usedAttributes.add(attribute);
+    const fine = fineByCoarse.get(channel.channel);
+    resolved.push({
+      attribute,
+      prettyName: channel.prettyName,
+      offsets: fine
+        ? [channel.channel, fine.channel]
+        : [channel.channel],
+      defaultValue: channel.defaultValue,
+      functions: channel.functions,
+    });
   }
 
   return resolved;
@@ -148,6 +127,14 @@ function emitVirtualDimmerChannel(lines: string[], geometry: string): void {
   lines.push(`          </DMXChannel>`);
 }
 
+function formatDmxValue(
+  value: number,
+  byteCount: number,
+  shift = false
+): string {
+  return `${Math.round(value)}/1${shift && byteCount > 1 ? "s" : ""}`;
+}
+
 function emitDmxChannel(
   lines: string[],
   ch: ResolvedChannel,
@@ -160,43 +147,67 @@ function emitDmxChannel(
   const offsetStr = ch.offsets.join(",");
   const feature = getFeatureForAttribute(attrName);
   let highlight = "None";
-  if (attrName === "Dimmer") highlight = `255/${byteCount}`;
-  else if (feature === "Color.Color") highlight = `255/${byteCount}`;
+  if (isDimmerAttribute(attrName)) highlight = formatDmxValue(255, byteCount);
+  else if (feature === "Color.Color")
+    highlight = formatDmxValue(255, byteCount);
 
   const functions =
     ch.functions && ch.functions.length > 0 ? ch.functions : null;
-
-  const firstFnName = functions
-    ? sanitizeName(functions[0].name)
+  const initialFnIndex = functions
+    ? Math.max(
+        0,
+        functions.findIndex(
+          (fn) => ch.defaultValue >= fn.dmxFrom && ch.defaultValue <= fn.dmxTo
+        )
+      )
+    : 0;
+  const initialFnName = functions
+    ? channelFunctionName(functions[initialFnIndex].name, initialFnIndex)
     : `${attrName} 1`;
-  const initialFn = `${channelNodeName}.${attrName}.${firstFnName}`;
+  const initialFn = `${channelNodeName}.${attrName}.${initialFnName}`;
 
-  const defaultVal = `${Math.round(ch.defaultValue)}/${byteCount}`;
+  const defaultVal = formatDmxValue(ch.defaultValue, byteCount);
   const physicalRange = getPhysicalRange(attrName, fixture);
 
   lines.push(
     `          <DMXChannel DMXBreak="1" Offset="${offsetStr}" Highlight="${highlight}" Geometry="${geometry}" InitialFunction="${escapeXml(initialFn)}">`
   );
   lines.push(
-    `            <LogicalChannel Attribute="${escapeXml(attrName)}" Snap="No" Master="${attrName === "Dimmer" ? "Grand" : "None"}" MibFade="0.000000" DMXChangeTimeLimit="0.000000">`
+    `            <LogicalChannel Attribute="${escapeXml(attrName)}" Snap="No" Master="${isDimmerAttribute(attrName) ? "Grand" : "None"}" MibFade="0.000000" DMXChangeTimeLimit="0.000000">`
   );
 
   if (functions) {
-    for (const fn of functions) {
-      const fnName = sanitizeName(fn.name);
+    for (const [index, fn] of functions.entries()) {
+      const fnName = channelFunctionName(fn.name, index);
       const fnAttr = fn.attribute ?? attrName;
       const physFrom = fn.physicalFrom ?? physicalRange.from;
       const physTo = fn.physicalTo ?? physicalRange.to;
-      lines.push(
-        `              <ChannelFunction Name="${escapeXml(fnName)}" Default="${defaultVal}" DMXFrom="${fn.dmxFrom}/${byteCount}" PhysicalFrom="${physFrom.toFixed(6)}" PhysicalTo="${physTo.toFixed(6)}" RealFade="0.000000" RealAcceleration="0.000000" Min="${physFrom.toFixed(6)}" Max="${physTo.toFixed(6)}" CustomName="" OriginalAttribute="" Attribute="${escapeXml(fnAttr)}"/>`
+      const wheelSlot = findWheelSlot(attrName, fn, fixture);
+      const wheel = wheelSlot
+        ? ` Wheel="${escapeXml(wheelSlot.wheel.name)}"`
+        : "";
+      const functionDefault = formatDmxValue(
+        Math.max(fn.dmxFrom, Math.min(fn.dmxTo, ch.defaultValue)),
+        byteCount
       );
+      const dmxFrom = formatDmxValue(fn.dmxFrom, byteCount, true);
+      const channelFunction = `              <ChannelFunction Name="${escapeXml(fnName)}" Default="${functionDefault}" DMXFrom="${dmxFrom}" PhysicalFrom="${physFrom.toFixed(6)}" PhysicalTo="${physTo.toFixed(6)}" RealFade="0.000000" RealAcceleration="0.000000" Min="${physFrom.toFixed(6)}" Max="${physTo.toFixed(6)}" CustomName="" OriginalAttribute="" Attribute="${escapeXml(fnAttr)}"${wheel}`;
+      if (wheelSlot) {
+        lines.push(`${channelFunction}>`);
+        lines.push(
+          `                <ChannelSet Name="${escapeXml(wheelSlot.slot.name)}" DMXFrom="${dmxFrom}" WheelSlotIndex="${wheelSlot.index}"/>`
+        );
+        lines.push(`              </ChannelFunction>`);
+      } else {
+        lines.push(`${channelFunction}/>`);
+      }
     }
   } else {
     const cfName = `${attrName} 1`;
     const physFrom = physicalRange.from;
     const physTo = physicalRange.to;
     lines.push(
-      `              <ChannelFunction Name="${escapeXml(cfName)}" Default="${defaultVal}" DMXFrom="0/${byteCount}" PhysicalFrom="${physFrom.toFixed(6)}" PhysicalTo="${physTo.toFixed(6)}" RealFade="0.000000" RealAcceleration="0.000000" Min="${physFrom.toFixed(6)}" Max="${physTo.toFixed(6)}" CustomName="" OriginalAttribute="" Attribute="${escapeXml(attrName)}"/>`
+      `              <ChannelFunction Name="${escapeXml(cfName)}" Default="${defaultVal}" DMXFrom="${formatDmxValue(0, byteCount, true)}" PhysicalFrom="${physFrom.toFixed(6)}" PhysicalTo="${physTo.toFixed(6)}" RealFade="0.000000" RealAcceleration="0.000000" Min="${physFrom.toFixed(6)}" Max="${physTo.toFixed(6)}" CustomName="" OriginalAttribute="" Attribute="${escapeXml(attrName)}"/>`
     );
   }
 
@@ -210,10 +221,11 @@ function emitDmxChannel(
 export function generateDescriptionXml(fixture: FixtureData): string {
   const fixtureTypeId = generateUuid();
   const geometryName = "Base";
+  const hasSubFixtures = fixture.dmxModes.some((mode) => mode.subFixtures);
 
-  // Resolve channels per mode (merge fine/coarse pairs for global channels only)
-  const resolvedModes = fixture.dmxModes.map((mode) => ({
+  const resolvedModes = fixture.dmxModes.map((mode, index) => ({
     ...mode,
+    geometryName: hasSubFixtures ? `${geometryName}_${index + 1}` : geometryName,
     resolved: resolveChannels(mode.channels),
   }));
 
@@ -224,11 +236,21 @@ export function generateDescriptionXml(fixture: FixtureData): string {
       if (!attributeMap.has(ch.attribute)) {
         attributeMap.set(ch.attribute, ch.prettyName);
       }
+      for (const fn of ch.functions ?? []) {
+        if (fn.attribute && !attributeMap.has(fn.attribute)) {
+          attributeMap.set(fn.attribute, fn.name);
+        }
+      }
     }
     if (mode.subFixtures) {
       for (const ch of mode.subFixtures.channels) {
         if (!attributeMap.has(ch.gdtfAttribute)) {
           attributeMap.set(ch.gdtfAttribute, ch.prettyName);
+        }
+        for (const fn of ch.functions ?? []) {
+          if (fn.attribute && !attributeMap.has(fn.attribute)) {
+            attributeMap.set(fn.attribute, fn.name);
+          }
         }
       }
       // Virtual dimmer on template geometry needs its attribute registered
@@ -301,9 +323,9 @@ export function generateDescriptionXml(fixture: FixtureData): string {
       );
       for (const slot of wheel.slots) {
         if (slot.color) {
-          const { r, g, b } = hexToRgbFloats(slot.color);
+          const { x, y, Y } = hexToCie(slot.color);
           lines.push(
-            `        <Slot Name="${escapeXml(slot.name)}" Color="${r.toFixed(6)},${g.toFixed(6)},${b.toFixed(6)}"/>`
+            `        <Slot Name="${escapeXml(slot.name)}" Color="${x.toFixed(6)},${y.toFixed(6)},${Y.toFixed(6)}"/>`
           );
         } else {
           lines.push(
@@ -355,26 +377,30 @@ export function generateDescriptionXml(fixture: FixtureData): string {
     lines.push(
       `      <Beam Name="Beam" Position="${IDENTITY_MATRIX}" LampType="${escapeXml(lampType)}" PowerConsumption="${(parseFloat(powerConsumption) / maxSubFixtures).toFixed(6)}" LuminousFlux="${(luminousFlux / maxSubFixtures).toFixed(6)}" ColorTemperature="${colorTemperature.toFixed(6)}" BeamAngle="${beamAngle.toFixed(6)}" BeamRadius="0.050000" FieldAngle="${fieldAngle.toFixed(6)}" BeamType="${escapeXml(beamType)}" ColorRenderingIndex="${cri}"/>`
     );
-    // Parent geometry containing global channels + pixel references
-    const sfLayout = fixture.dmxModes
-      .map((m) => m.subFixtures)
-      .find((sf) => sf && sf.count === maxSubFixtures);
-    lines.push(
-      `      <Geometry Name="${geometryName}" Position="${IDENTITY_MATRIX}">`
-    );
-    for (let i = 1; i <= maxSubFixtures; i++) {
-      const dmxOffset = sfLayout
-        ? sfLayout.firstChannel + (i - 1) * sfLayout.channels.length
-        : i;
+    for (const mode of resolvedModes) {
       lines.push(
-        `        <GeometryReference Name="Pixel_${i}" Geometry="Beam" Position="${IDENTITY_MATRIX}">`
+        `      <Geometry Name="${mode.geometryName}" Position="${IDENTITY_MATRIX}">`
       );
-      lines.push(
-        `          <Break DMXBreak="1" DMXOffset="${dmxOffset}"/>`
-      );
-      lines.push(`        </GeometryReference>`);
+      if (mode.subFixtures) {
+        const sf = mode.subFixtures;
+        for (let i = 1; i <= sf.count; i++) {
+          const dmxOffset =
+            sf.firstChannel + (i - 1) * sf.channels.length;
+          lines.push(
+            `        <GeometryReference Name="${escapeXml(sanitizeName(sf.name))}_${i}" Geometry="Beam" Position="${IDENTITY_MATRIX}">`
+          );
+          lines.push(
+            `          <Break DMXBreak="1" DMXOffset="${dmxOffset}"/>`
+          );
+          lines.push(`        </GeometryReference>`);
+        }
+      } else {
+        lines.push(
+          `        <GeometryReference Name="Beam" Geometry="Beam" Position="${IDENTITY_MATRIX}"/>`
+        );
+      }
+      lines.push(`      </Geometry>`);
     }
-    lines.push(`      </Geometry>`);
   } else {
     lines.push(
       `      <Geometry Name="${geometryName}" Position="${IDENTITY_MATRIX}">`
@@ -390,15 +416,14 @@ export function generateDescriptionXml(fixture: FixtureData): string {
   lines.push(`    <DMXModes>`);
 
   for (const mode of resolvedModes) {
-    const modeGeometry = geometryName;
     lines.push(
-      `      <DMXMode Name="${escapeXml(mode.name)}" Description="" Geometry="${modeGeometry}">`
+      `      <DMXMode Name="${escapeXml(mode.name)}" Description="" Geometry="${mode.geometryName}">`
     );
     lines.push(`        <DMXChannels>`);
 
     // Global channels
     for (const ch of mode.resolved) {
-      emitDmxChannel(lines, ch, geometryName, fixture);
+      emitDmxChannel(lines, ch, mode.geometryName, fixture);
     }
 
     // Sub-fixture channels — emit once against template geometry (Geometry Collect pattern)
@@ -435,7 +460,7 @@ export function generateDescriptionXml(fixture: FixtureData): string {
         if (feature === "Color.Color") {
           const followerNode = `Beam_${attr}`;
           const fnName = sfCh.functions?.[0]
-            ? sanitizeName(sfCh.functions[0].name)
+            ? channelFunctionName(sfCh.functions[0].name, 0)
             : `${attr} 1`;
           const follower = `${followerNode}.${attr}.${fnName}`;
           lines.push(
@@ -478,13 +503,44 @@ function getPhysicalRange(
   return { from: 0, to: 1 };
 }
 
-function hexToRgbFloats(hex: string): { r: number; g: number; b: number } {
-  const clean = hex.replace("#", "");
-  if (clean.length !== 6) return { r: 1, g: 1, b: 1 };
-  const r = parseInt(clean.substring(0, 2), 16) / 255;
-  const g = parseInt(clean.substring(2, 4), 16) / 255;
-  const b = parseInt(clean.substring(4, 6), 16) / 255;
-  return { r, g, b };
+function findWheelSlot(
+  attrName: string,
+  fn: ChannelFunction,
+  fixture: FixtureData
+) {
+  if (fn.attribute && fn.attribute !== attrName) return undefined;
+  const match = /^(Color|Gobo)(\d+)$/.exec(attrName);
+  if (!match) return undefined;
+  const wheel = fixture.wheels?.filter((item) => item.type === match[1])[
+    Number(match[2]) - 1
+  ];
+  if (!wheel) return undefined;
+  const fnName = fn.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+  // ponytail: name matching covers extracted slots; add an explicit slot index if names become ambiguous.
+  const slotIndex = wheel.slots.findIndex((slot) => {
+    const slotName = slot.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+    return slotName.length > 0 && fnName.includes(slotName);
+  });
+  if (slotIndex === -1) return undefined;
+  return { wheel, slot: wheel.slots[slotIndex], index: slotIndex + 1 };
+}
+
+function hexToCie(hex: string): { x: number; y: number; Y: number } {
+  const linearize = (value: number) =>
+    value <= 0.04045
+      ? value / 12.92
+      : Math.pow((value + 0.055) / 1.055, 2.4);
+  const clean = hex.slice(1);
+  const r = linearize(parseInt(clean.slice(0, 2), 16) / 255);
+  const g = linearize(parseInt(clean.slice(2, 4), 16) / 255);
+  const b = linearize(parseInt(clean.slice(4, 6), 16) / 255);
+  const X = 0.4124564 * r + 0.3575761 * g + 0.1804375 * b;
+  const Y = 0.2126729 * r + 0.7151522 * g + 0.072175 * b;
+  const Z = 0.0193339 * r + 0.119192 * g + 0.9503041 * b;
+  const sum = X + Y + Z;
+  return sum === 0
+    ? { x: 0.3127, y: 0.329, Y: 0 }
+    : { x: X / sum, y: Y / sum, Y: Y * 100 };
 }
 
 function parseWeight(weight: string): string {

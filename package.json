@@ -9,11 +9,13 @@
     "dev": "react-router dev",
     "postinstall": "npm run cf-typegen",
     "preview": "pnpm run build && vite preview",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "typecheck": "npm run cf-typegen && react-router typegen && tsc -b"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.50",
     "@ai-sdk/google": "^3.0.34",
+    "@convex-dev/polar": "^0.8.1",
     "@react-three/fiber": "^9.5.0",
     "@shadergradient/react": "^2.4.20",
     "ai": "^6.0.105",

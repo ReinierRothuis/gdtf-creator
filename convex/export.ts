@@ -35,10 +35,15 @@ export const exportGdtf = action({
 
     const storageId = await ctx.storage.store(blob);
 
-    await ctx.runMutation(internal.sessions.storeGdtfFile, {
-      sessionId: args.sessionId,
-      storageId,
-    });
+    try {
+      await ctx.runMutation(internal.sessions.storeGdtfFile, {
+        sessionId: args.sessionId,
+        storageId,
+      });
+    } catch (error) {
+      await ctx.storage.delete(storageId);
+      throw error;
+    }
 
     const url = await ctx.storage.getUrl(storageId);
     return url;

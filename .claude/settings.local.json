@@ -32,7 +32,9 @@
       "Bash(pnpm remove:*)",
       "WebFetch(domain:ai.google.dev)",
       "WebFetch(domain:www.npmjs.com)",
-      "WebFetch(domain:shadergradient.co)"
+      "WebFetch(domain:shadergradient.co)",
+      "WebFetch(domain:www.convex.dev)",
+      "Bash(pnpm install:*)"
     ]
   }
 }

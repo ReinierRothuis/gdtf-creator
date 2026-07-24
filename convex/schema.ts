@@ -15,6 +15,7 @@ const dmxChannel = v.object({
   gdtfAttribute: v.string(),
   prettyName: v.string(),
   defaultValue: v.number(),
+  fineOf: v.optional(v.number()),
   functions: v.optional(v.array(channelFunction)),
 });
 

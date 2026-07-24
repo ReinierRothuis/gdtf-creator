@@ -77,12 +77,30 @@ export const storeError = internalMutation({
   },
 });
 
+export const deletePdf = internalMutation({
+  args: {
+    sessionId: v.id("sessions"),
+    storageId: v.id("_storage"),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    await ctx.storage.delete(args.storageId);
+    if (session?.pdfStorageId === args.storageId) {
+      await ctx.db.patch(args.sessionId, { pdfStorageId: undefined });
+    }
+  },
+});
+
 export const storeGdtfFile = internalMutation({
   args: {
     sessionId: v.id("sessions"),
     storageId: v.id("_storage"),
   },
   handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (session?.gdtfStorageId) {
+      await ctx.storage.delete(session.gdtfStorageId);
+    }
     await ctx.db.patch(args.sessionId, {
       gdtfStorageId: args.storageId,
     });

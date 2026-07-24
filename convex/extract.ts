@@ -6,10 +6,12 @@ import { internal } from "./_generated/api";
 import { generateText, Output } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { fixtureDataSchema } from "./schema/fixture";
+import type { Id } from "./_generated/dataModel";
 
 export const extractFixtureData = internalAction({
   args: { sessionId: v.id("sessions") },
   handler: async (ctx, args) => {
+    let pdfStorageId: Id<"_storage"> | undefined;
     try {
       const session = await ctx.runQuery(internal.sessions.internalGetSession, {
         id: args.sessionId,
@@ -17,8 +19,9 @@ export const extractFixtureData = internalAction({
       if (!session?.pdfStorageId) {
         throw new Error("Session has no PDF");
       }
+      pdfStorageId = session.pdfStorageId;
 
-      const pdfUrl = await ctx.storage.getUrl(session.pdfStorageId);
+      const pdfUrl = await ctx.storage.getUrl(pdfStorageId);
       if (!pdfUrl) {
         throw new Error("Could not get PDF URL");
       }
@@ -52,11 +55,12 @@ export const extractFixtureData = internalAction({
 4. **DMX modes** — each mode with:
    - Mode name and total channel count
    - Every channel: channel number, GDTF attribute name (see below), pretty/display name, default DMX value (0–255)
+   - For a fine/16-bit channel, set \`fineOf\` to the channel number of its coarse channel and use the same GDTF attribute. Never set \`fineOf\` merely because two independent channels share an attribute.
    - **Channel functions**: For each channel, extract ALL DMX value ranges that define different behaviors. Each function needs: name, dmxFrom, dmxTo (0–255 range). Optionally include physicalFrom/physicalTo for continuous ranges.
    - **Sub-fixtures**: If a mode has repeating channel groups for individually controllable pixels, cells, or sections (e.g. "48ch" mode with 12×RGBW pixels), use the \`subFixtures\` field (see below). When using subFixtures, only include the **global/master** channels (virtual dimmer, strobe, macro, etc.) in the \`channels\` array — do NOT repeat individual pixel channels.
 5. **Physical properties** — weight (kg), dimensions width/height/depth (mm), power consumption (W). Include units in the string values.
 6. **Pan/tilt range** — If this is a moving head or scanner, extract the pan range and tilt range in degrees (e.g. panRange: 540, tiltRange: 270).
-7. **Wheels** — Extract color wheel and gobo wheel definitions if present. Each wheel needs a name, type ("Color" or "Gobo"), and an array of slots with names. For color wheels, include the color as a CSS-compatible color string if determinable (e.g. "#ff0000" for red).
+7. **Wheels** — Extract color wheel and gobo wheel definitions if present. Each wheel needs a name, type ("Color" or "Gobo"), and an array of slots with names. For color wheels, include the color as a 6-digit hex string if determinable (e.g. "#ff0000" for red).
 8. **Beam properties** — Extract from the spec/technical data section: lampType (e.g. "LED", "Discharge"), beamAngle (degrees), fieldAngle (degrees), colorTemperature (Kelvin), cri (0–100), luminousFlux (lumens), beamType ("Wash", "Spot", or "None").
 
 # Channel functions example
@@ -266,6 +270,13 @@ Be thorough: extract ALL DMX modes and ALL channels in each mode. If a default v
         sessionId: args.sessionId,
         errorMessage: message,
       });
+    } finally {
+      if (pdfStorageId) {
+        await ctx.runMutation(internal.sessions.deletePdf, {
+          sessionId: args.sessionId,
+          storageId: pdfStorageId,
+        });
+      }
     }
   },
 });
