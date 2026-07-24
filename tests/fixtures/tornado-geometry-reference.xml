@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GDTF DataVersion="1.2">
+  <FixtureType Name="TORNADO" LongName="TORNADO" Manufacturer="ACME">
+    <Wheels/>
+    <PhysicalDescriptions><Properties><Weight Value="29"/></Properties></PhysicalDescriptions>
+    <Geometries>
+      <Geometry Name="Base 170CH">
+        <GeometryReference Name="LED 1" Geometry="LED Template"><Break DMXBreak="1" DMXOffset="10"/></GeometryReference>
+        <GeometryReference Name="LED 2" Geometry="LED Template"><Break DMXBreak="1" DMXOffset="13"/></GeometryReference>
+        <GeometryReference Name="Beam 1" Geometry="Beam Template"><Break DMXBreak="1" DMXOffset="5"/></GeometryReference>
+        <GeometryReference Name="Beam 2" Geometry="Beam Template"><Break DMXBreak="1" DMXOffset="38"/></GeometryReference>
+      </Geometry>
+      <Beam Name="Beam Template" BeamType="Spot" BeamAngle="3" FieldAngle="3" ColorTemperature="6000" ColorRenderingIndex="80" LuminousFlux="6300"/>
+      <Beam Name="LED Template" BeamType="Glow" BeamAngle="35" FieldAngle="35" ColorTemperature="6000" ColorRenderingIndex="80" LuminousFlux="400"/>
+    </Geometries>
+    <DMXModes>
+      <DMXMode Name="Mode 5 170DMX" Geometry="Base 170CH">
+        <DMXChannels>
+          <DMXChannel Offset="1,2" Geometry="Head"><LogicalChannel Attribute="Pan"><ChannelFunction Name="Pan" Default="32768/2" DMXFrom="0/2" Attribute="Pan"/></LogicalChannel></DMXChannel>
+          <DMXChannel Offset="169" Geometry="LED Template"><LogicalChannel Attribute="Shutter1"><ChannelFunction Name="Open" Default="0/1" DMXFrom="0/1" Attribute="Shutter1"/></LogicalChannel></DMXChannel>
+          <DMXChannel Offset="170" Geometry="Base 170CH"><LogicalChannel Attribute="Function"><ChannelFunction Name="Function" Default="0/1" DMXFrom="0/1" Attribute="Function"/></LogicalChannel></DMXChannel>
+          <DMXChannel Offset="1" Geometry="LED Template"><LogicalChannel Attribute="ColorAdd_R"><ChannelFunction Name="Red" Default="0/1" DMXFrom="0/1" Attribute="ColorAdd_R"/></LogicalChannel></DMXChannel>
+          <DMXChannel Offset="2" Geometry="LED Template"><LogicalChannel Attribute="ColorAdd_G"><ChannelFunction Name="Green" Default="0/1" DMXFrom="0/1" Attribute="ColorAdd_G"/></LogicalChannel></DMXChannel>
+          <DMXChannel Offset="3" Geometry="LED Template"><LogicalChannel Attribute="ColorAdd_B"><ChannelFunction Name="Blue" Default="0/1" DMXFrom="0/1" Attribute="ColorAdd_B"/></LogicalChannel></DMXChannel>
+          <DMXChannel Offset="1" Geometry="Beam Template"><LogicalChannel Attribute="ColorAdd_R"><ChannelFunction Name="Red" Default="0/1" DMXFrom="0/1" Attribute="ColorAdd_R"/></LogicalChannel></DMXChannel>
+          <DMXChannel Offset="2" Geometry="Beam Template"><LogicalChannel Attribute="ColorAdd_G"><ChannelFunction Name="Green" Default="0/1" DMXFrom="0/1" Attribute="ColorAdd_G"/></LogicalChannel></DMXChannel>
+          <DMXChannel Offset="3" Geometry="Beam Template"><LogicalChannel Attribute="ColorAdd_B"><ChannelFunction Name="Blue" Default="0/1" DMXFrom="0/1" Attribute="ColorAdd_B"/></LogicalChannel></DMXChannel>
+          <DMXChannel Offset="4" Geometry="Beam Template"><LogicalChannel Attribute="ColorAdd_GY"><ChannelFunction Name="Lime" Default="0/1" DMXFrom="0/1" Attribute="ColorAdd_GY"/></LogicalChannel></DMXChannel>
+        </DMXChannels>
+      </DMXMode>
+    </DMXModes>
+  </FixtureType>
+</GDTF>

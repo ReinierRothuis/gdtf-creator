@@ -1,6 +1,12 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["vite.config.ts"],
+  "include": [
+    "vite.config.ts",
+    "scripts/**/*.ts",
+    "convex/extractionPaths.ts",
+    "convex/extractionPrompt.ts",
+    "convex/schema/fixture.ts"
+  ],
   "compilerOptions": {
     "composite": true,
     "strict": true,
@@ -8,6 +14,7 @@
     "lib": ["ES2022"],
     "target": "ES2022",
     "module": "ES2022",
-    "moduleResolution": "bundler"
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true
   }
 }

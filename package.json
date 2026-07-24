@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "benchmark": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/benchmark.ts",
     "build": "react-router build",
     "cf-typegen": "wrangler types",
     "deploy": "pnpm run build && wrangler deploy",
@@ -21,6 +22,7 @@
     "@shadergradient/react": "^2.4.20",
     "ai": "^6.0.105",
     "convex": "^1.32.0",
+    "fast-xml-parser": "^5.10.1",
     "isbot": "^5.1.31",
     "jszip": "^3.10.1",
     "lucide-react": "^0.575.0",

@@ -218,3 +218,133 @@ export type Wheel = z.infer<typeof wheelSchema>;
 export type BeamProperties = z.infer<typeof beamPropertiesSchema>;
 export type PhysicalProperties = z.infer<typeof physicalPropertiesSchema>;
 export type FixtureData = z.infer<typeof fixtureDataSchema>;
+
+/** Repair common structured-output serialization/layout mistakes before strict validation. */
+export function repairFixtureDataWithReport(value: unknown): {
+  fixtureData: FixtureData;
+  repairs: string[];
+} {
+  const parsed = typeof value === "string" ? JSON.parse(value) : value;
+  const fixture = structuredClone(parsed) as Record<string, any>;
+  const repairs: string[] = [];
+
+  for (const key of ["dmxModes", "physical", "wheels", "beam"]) {
+    if (typeof fixture[key] === "string") {
+      fixture[key] = JSON.parse(fixture[key]);
+      repairs.push(`parsed stringified ${key}`);
+    }
+  }
+  if (Array.isArray(fixture.wheels) && fixture.wheels.length === 0) {
+    delete fixture.wheels;
+    repairs.push("removed empty wheels");
+  }
+  if (fixture.physical && typeof fixture.physical === "object") {
+    for (const key of ["panRange", "tiltRange"]) {
+      if (fixture[key] !== undefined && fixture.physical[key] === undefined) {
+        fixture.physical[key] = fixture[key];
+        delete fixture[key];
+        repairs.push(`moved ${key} into physical`);
+      }
+    }
+  }
+
+  if (Array.isArray(fixture.dmxModes)) {
+    fixture.dmxModes = fixture.dmxModes.filter((mode: Record<string, any>) => {
+      const valid = Number.isInteger(mode.channelCount) && mode.channelCount > 0 &&
+        Array.isArray(mode.channels) && mode.channels.length > 0;
+      if (!valid) repairs.push(`removed invalid mode ${mode.name ?? "unnamed"}`);
+      return valid;
+    });
+  }
+
+  for (const mode of Array.isArray(fixture.dmxModes) ? fixture.dmxModes : []) {
+    const originalCount = mode.channels.length;
+    mode.channels = mode.channels.filter(
+      (channel: Record<string, unknown>) =>
+        Number.isInteger(channel.channel) && Number(channel.channel) > 0 && Number(channel.channel) <= mode.channelCount
+    );
+    for (let index = mode.channels.length; index < originalCount; index++) {
+      repairs.push(`removed out-of-range channel from ${mode.name}`);
+    }
+
+    if (mode.subFixtures === null) {
+      delete mode.subFixtures;
+      repairs.push(`removed null sub-fixture layout from ${mode.name}`);
+    }
+    if (mode.subFixtures && (
+      !Number.isInteger(mode.subFixtures.count) || mode.subFixtures.count < 1 ||
+      !Number.isInteger(mode.subFixtures.firstChannel) || mode.subFixtures.firstChannel < 1 ||
+      !Array.isArray(mode.subFixtures.channels) || mode.subFixtures.channels.length < 1
+    )) {
+      delete mode.subFixtures;
+      repairs.push(`removed invalid sub-fixture layout from ${mode.name}`);
+    }
+
+    const channelsByNumber = new Map<number, Record<string, any>>(
+      mode.channels.map((channel: Record<string, any>) => [channel.channel, channel])
+    );
+    const fineTargets = new Set<number>();
+    let removedFineLinks = false;
+    let normalizedFunctions = false;
+    for (const channel of mode.channels) {
+      if (channel.fineOf !== undefined) {
+        const coarse = channelsByNumber.get(channel.fineOf);
+        if (
+          !Number.isInteger(channel.fineOf) || channel.fineOf < 1 || !coarse ||
+          coarse.fineOf !== undefined || coarse.channel >= channel.channel ||
+          coarse.gdtfAttribute !== channel.gdtfAttribute || fineTargets.has(channel.fineOf)
+        ) {
+          delete channel.fineOf;
+          removedFineLinks = true;
+        } else {
+          fineTargets.add(channel.fineOf);
+        }
+      }
+
+      if (Array.isArray(channel.functions) && channel.functions.length) {
+        const functions = channel.functions
+          .filter((fn: Record<string, unknown>) => Number.isFinite(fn.dmxFrom) && Number.isFinite(fn.dmxTo))
+          .sort((left: Record<string, number>, right: Record<string, number>) => left.dmxFrom - right.dmxFrom)
+          .filter((fn: Record<string, number>, index: number, all: Array<Record<string, number>>) =>
+            index === 0 || fn.dmxFrom !== all[index - 1].dmxFrom
+          );
+        if (functions.length) {
+          for (let index = 0; index < functions.length; index++) {
+            const from = index === 0 ? 0 : Math.max(0, Math.min(255, Math.round(functions[index].dmxFrom)));
+            const to = index === functions.length - 1
+              ? 255
+              : Math.max(from, Math.min(255, Math.round(functions[index + 1].dmxFrom) - 1));
+            if (functions[index].dmxFrom !== from || functions[index].dmxTo !== to) normalizedFunctions = true;
+            functions[index].dmxFrom = from;
+            functions[index].dmxTo = to;
+          }
+          channel.functions = functions;
+        } else {
+          delete channel.functions;
+          normalizedFunctions = true;
+        }
+      }
+    }
+    if (removedFineLinks) repairs.push(`removed invalid fine links from ${mode.name}`);
+    if (normalizedFunctions) repairs.push(`normalized function ranges in ${mode.name}`);
+
+    const highestGlobal = Math.max(0, ...mode.channels.map((channel: Record<string, number>) => channel.channel));
+    if (mode.subFixtures && highestGlobal === mode.channelCount) {
+      delete mode.subFixtures;
+      repairs.push(`removed redundant sub-fixture layout from ${mode.name}`);
+    }
+    const highestChannel = mode.subFixtures
+      ? Math.max(highestGlobal, mode.subFixtures.firstChannel + mode.subFixtures.count * mode.subFixtures.channels.length - 1)
+      : highestGlobal;
+    if (highestChannel > 0 && highestChannel !== mode.channelCount) {
+      repairs.push(`changed channel count from ${mode.channelCount} to ${highestChannel} in ${mode.name}`);
+      mode.channelCount = highestChannel;
+    }
+  }
+
+  return { fixtureData: fixtureDataSchema.parse(fixture), repairs };
+}
+
+export function repairFixtureData(value: unknown): FixtureData {
+  return repairFixtureDataWithReport(value).fixtureData;
+}

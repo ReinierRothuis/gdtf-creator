@@ -1,6 +1,6 @@
 "use node";
 
-import { anthropic } from "@ai-sdk/anthropic";
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { google } from "@ai-sdk/google";
 import { openai } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
@@ -24,6 +24,7 @@ interface ExtractionRequest {
   providerOptions?: Record<string, Record<string, JSONValue>>;
   sourcePageCount?: number;
   sourceCharacterCount?: number;
+  cleanup?: () => Promise<void>;
 }
 
 export function getExtractionPath(
@@ -40,7 +41,7 @@ export function getExtractionPath(
 
 function requireEnv(name: string): string {
   const value = process.env[name];
-  if (!value) throw new Error(`Missing Convex environment variable: ${name}`);
+  if (!value) throw new Error(`Missing environment variable: ${name}`);
   return value;
 }
 
@@ -85,31 +86,137 @@ function qwenModel() {
 
 function nativePdfContent(
   pdfBuffer: ArrayBuffer,
-  prompt: string
+  prompt: string,
+  pdfUrl?: string
 ): UserContent {
   return [
     {
       type: "file",
-      data: new Uint8Array(pdfBuffer),
+      data: pdfUrl ? new URL(pdfUrl) : new Uint8Array(pdfBuffer),
       mediaType: "application/pdf",
     },
     { type: "text", text: prompt },
   ];
 }
 
+export function sanitizeAnthropicSchema(value: unknown): void {
+  if (!value || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    value.forEach(sanitizeAnthropicSchema);
+    return;
+  }
+  const schema = value as Record<string, unknown>;
+  if (schema.type === "integer" || schema.type === "number") {
+    delete schema.minimum;
+    delete schema.maximum;
+    delete schema.exclusiveMinimum;
+    delete schema.exclusiveMaximum;
+    delete schema.multipleOf;
+  }
+  Object.values(schema).forEach(sanitizeAnthropicSchema);
+}
+
+function anthropicModel(apiKey: string, file?: { marker: string; id: string }) {
+  return createAnthropic({
+    apiKey,
+    fetch: async (input, init) => {
+      if (typeof init?.body === "string") {
+        const body = JSON.parse(init.body) as {
+          messages?: Array<{ content?: Array<any> }>;
+          output_config?: { format?: { schema?: unknown } };
+        };
+        sanitizeAnthropicSchema(body.output_config?.format?.schema);
+        if (file) {
+          for (const message of body.messages ?? []) {
+            for (const part of message.content ?? []) {
+              if (part.type === "document" && part.source?.data === file.marker) {
+                part.source = { type: "file", file_id: file.id };
+              }
+            }
+          }
+        }
+        const headers = new Headers(init.headers);
+        if (file) {
+          const betas = new Set(
+            `${headers.get("anthropic-beta") ?? ""},files-api-2025-04-14`
+              .split(",")
+              .map((value) => value.trim())
+              .filter(Boolean)
+          );
+          headers.set("anthropic-beta", [...betas].join(","));
+        }
+        init = { ...init, headers, body: JSON.stringify(body) };
+      }
+      return fetch(input, init);
+    },
+  })("claude-haiku-4-5-20251001");
+}
+
+async function anthropicUploadedPdfRequest(
+  pdfBuffer: ArrayBuffer,
+  prompt: string,
+  path: ExtractionPath
+): Promise<ExtractionRequest> {
+  const apiKey = requireEnv("ANTHROPIC_API_KEY");
+  const form = new FormData();
+  form.append("file", new Blob([pdfBuffer], { type: "application/pdf" }), "manual.pdf");
+  const upload = await fetch("https://api.anthropic.com/v1/files", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-beta": "files-api-2025-04-14",
+    },
+    body: form,
+  });
+  const uploaded = (await upload.json()) as { id?: string; error?: { message?: string } };
+  if (!upload.ok || !uploaded.id) {
+    throw new Error(uploaded.error?.message ?? `Anthropic file upload failed: ${upload.status}`);
+  }
+
+  // Valid base64 prevents AI SDK from treating the marker as a URL to download.
+  const marker = btoa(`anthropic-upload:${uploaded.id}`);
+  const model = anthropicModel(apiKey, { marker, id: uploaded.id });
+
+  return {
+    path,
+    model,
+    content: [
+      { type: "file", data: marker, mediaType: "application/pdf" },
+      { type: "text", text: prompt },
+    ],
+    cleanup: async () => {
+      const deleted = await fetch(`https://api.anthropic.com/v1/files/${uploaded.id}`, {
+        method: "DELETE",
+        headers: {
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-beta": "files-api-2025-04-14",
+        },
+      });
+      if (!deleted.ok) throw new Error(`Could not delete Anthropic file: ${deleted.status}`);
+    },
+  };
+}
+
 export async function createExtractionRequest(
   pdfBuffer: ArrayBuffer,
-  prompt: string
+  prompt: string,
+  pathValue?: string,
+  pdfUrl?: string
 ): Promise<ExtractionRequest> {
-  const path = getExtractionPath();
+  const path = getExtractionPath(pathValue);
 
   switch (path) {
     case "claude-haiku-native":
       requireEnv("ANTHROPIC_API_KEY");
+      if (!pdfUrl && pdfBuffer.byteLength > 20 * 1024 * 1024) {
+        return anthropicUploadedPdfRequest(pdfBuffer, prompt, path);
+      }
       return {
         path,
-        model: anthropic("claude-haiku-4-5-20251001"),
-        content: nativePdfContent(pdfBuffer, prompt),
+        model: anthropicModel(requireEnv("ANTHROPIC_API_KEY")),
+        content: nativePdfContent(pdfBuffer, prompt, pdfUrl),
       };
     case "gemini-flash-lite-native":
       requireEnv("GOOGLE_GENERATIVE_AI_API_KEY");
@@ -124,7 +231,7 @@ export async function createExtractionRequest(
         path,
         model: openai("gpt-5.4-nano"),
         content: nativePdfContent(pdfBuffer, prompt),
-        providerOptions: { openai: { store: false } },
+        providerOptions: { openai: { store: false, strictJsonSchema: false } },
       };
     case "openrouter-unpdf-qwen": {
       const pdf = await getDocumentProxy(new Uint8Array(pdfBuffer));

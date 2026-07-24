@@ -102,6 +102,7 @@ export default defineSchema({
         extractionDurationMs: v.number(),
         modelId: v.string(),
         finishReason: v.string(),
+        repairedOutput: v.optional(v.boolean()),
         pdfSizeBytes: v.number(),
         extractionPath: v.optional(v.string()),
         sourcePageCount: v.optional(v.number()),

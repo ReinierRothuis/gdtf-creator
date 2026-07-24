@@ -39,3 +39,60 @@ pnpm convex env set GOOGLE_GENERATIVE_AI_API_KEY <key>
 Use `pnpm convex env list` to inspect active values. Unknown flag values fail explicitly instead of silently falling back.
 
 Cloudflare Markdown conversion is called directly from Convex. It is free for most documents; image analysis can consume Workers AI usage beyond its daily free allocation. OpenAI PDF extraction also runs directly and disables response storage.
+
+## Extraction benchmark
+
+Put each manual and its validated `.gdtf` in one directory. Files may share a basename, or each fixture may have its own subdirectory containing one PDF and one GDTF.
+
+```text
+manuals/
+  fixture-a/
+    manual.pdf
+    validated.gdtf
+  fixture-b/
+    fixture-b.pdf
+    fixture-b.gdtf
+```
+
+Export the provider keys listed above, then run:
+
+```bash
+pnpm benchmark -- ./manuals
+```
+
+Outputs `benchmark-output/report.html` plus resumable raw results in `benchmark-output/report.json`. The report compares weighted correctness, schema success, input/output tokens, latency, estimated cost, and per-fixture/per-category scores.
+
+Useful options:
+
+```bash
+pnpm benchmark -- ./manuals \
+  --paths claude-haiku-native,gemini-flash-lite-native \
+  --concurrency 2 \
+  --output ./benchmark-output/report.html
+```
+
+Concurrency is per extraction path. By default every manual runs concurrently on every selected path; `--concurrency 2` limits each path to two manuals at a time.
+
+Standard USD prices per million tokens are hardcoded from provider pricing checked 2026-07-24:
+
+| Path | Input | Output | Extra |
+|---|---:|---:|---|
+| `claude-haiku-native` | $1.00 | $5.00 | — |
+| `gemini-flash-lite-native` | $0.30 | $2.50 | — |
+| `openai-gpt-nano-native` | $0.20 | $1.25 | — |
+| `openrouter-unpdf-qwen` | $0.26 | $0.78 | $0.78/$2.34 at ≥256K input tokens |
+| `cloudflare-markdown-qwen` | $0.26 | $0.78 | Same Qwen tier; Markdown conversion treated as free |
+
+Sources: [Anthropic](https://www.anthropic.com/pricing), [Google](https://ai.google.dev/gemini-api/docs/pricing), [OpenAI](https://developers.openai.com/api/docs/pricing), [OpenRouter](https://openrouter.ai/api/v1/models), and [Cloudflare](https://developers.cloudflare.com/workers-ai/features/markdown-conversion/#pricing). Cloudflare image-processing overages are excluded because the conversion API does not return them.
+
+For ambiguous filenames, add `manuals/benchmark-manifest.json`:
+
+```json
+[
+  { "name": "Fixture A", "pdf": "fixture-a/manual.pdf", "gdtf": "fixture-a/validated.gdtf" }
+]
+```
+
+Each path uses the shared extraction contract plus its own model-specific addendum in `convex/extractionPrompt.ts`; changing one path's prompt invalidates only that path's benchmark cache. Each manual is processed once per path at temperature 0. Claude PDFs above 20 MiB are automatically uploaded through Anthropic's Files API instead of being base64-embedded, then deleted after extraction; production uses the existing Convex storage URL. Successful results are cached by PDF, GDTF, prompt, and path. Use `--no-resume` to rerun them.
+
+Scores use externally validated GDTFs as ground truth. Mode pairing uses optimal assignment; channel scoring includes offsets, attributes, defaults, and fine links; function scoring uses DMX-range intersection-over-union; wheel scoring includes slot names and colors; physical scoring normalizes weight units and includes beam type. Deterministic output repairs subtract two percentage points each, capped at twenty. Fixture category and overall dimensions are not scored because GDTF does not provide reliable fixture-level ground truth for them. Valid GDTFs can still model equivalent fixtures differently, so inspect outliers.
