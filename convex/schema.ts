@@ -103,6 +103,9 @@ export default defineSchema({
         modelId: v.string(),
         finishReason: v.string(),
         pdfSizeBytes: v.number(),
+        extractionPath: v.optional(v.string()),
+        sourcePageCount: v.optional(v.number()),
+        sourceCharacterCount: v.optional(v.number()),
       })
     ),
     createdAt: v.number(),

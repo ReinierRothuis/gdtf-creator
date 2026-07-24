@@ -4,8 +4,8 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { generateText, Output } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
 import { fixtureDataSchema } from "./schema/fixture";
+import { createExtractionRequest } from "./extractionPaths";
 import type { Id } from "./_generated/dataModel";
 
 export const extractFixtureData = internalAction({
@@ -27,25 +27,14 @@ export const extractFixtureData = internalAction({
       }
 
       const pdfResponse = await fetch(pdfUrl);
+      if (!pdfResponse.ok) {
+        throw new Error(`Could not download PDF: ${pdfResponse.status}`);
+      }
       const pdfBuffer = await pdfResponse.arrayBuffer();
       const pdfSizeBytes = pdfBuffer.byteLength;
       const startTime = Date.now();
 
-      const result = await generateText({
-        model: anthropic("claude-haiku-4-5-20251001"),
-        output: Output.object({ schema: fixtureDataSchema }),
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "file",
-                data: Buffer.from(pdfBuffer),
-                mediaType: "application/pdf",
-              },
-              {
-                type: "text",
-                text: `Extract lighting fixture data from this PDF manual.
+      const extractionPrompt = `Extract lighting fixture data from this PDF manual.
 
 # Required data
 
@@ -236,11 +225,17 @@ For each DMX channel, use the standard GDTF attribute name in the \`gdtfAttribut
 For attributes not in this list, use a descriptive PascalCase name (e.g. "FanSpeed", "Macro").
 For the \`prettyName\` field, use a short human-readable label (e.g. "Dim", "R", "G", "B", "Pan", "Tilt").
 
-Be thorough: extract ALL DMX modes and ALL channels in each mode. If a default value is not specified in the PDF, use 0.`,
-              },
-            ],
-          },
-        ],
+Be thorough: extract ALL DMX modes and ALL channels in each mode. If a default value is not specified in the PDF, use 0.`;
+
+      const extraction = await createExtractionRequest(
+        pdfBuffer,
+        extractionPrompt
+      );
+      const result = await generateText({
+        model: extraction.model,
+        output: Output.object({ schema: fixtureDataSchema }),
+        messages: [{ role: "user", content: extraction.content }],
+        providerOptions: extraction.providerOptions,
       });
 
       const fixtureData = result.output;
@@ -256,6 +251,13 @@ Be thorough: extract ALL DMX modes and ALL channels in each mode. If a default v
         modelId: result.response.modelId,
         finishReason: result.finishReason,
         pdfSizeBytes,
+        extractionPath: extraction.path,
+        ...(extraction.sourcePageCount === undefined
+          ? {}
+          : { sourcePageCount: extraction.sourcePageCount }),
+        ...(extraction.sourceCharacterCount === undefined
+          ? {}
+          : { sourceCharacterCount: extraction.sourceCharacterCount }),
       };
 
       await ctx.runMutation(internal.sessions.storeFixtureData, {

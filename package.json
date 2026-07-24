@@ -15,11 +15,11 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.50",
     "@ai-sdk/google": "^3.0.34",
-    "@convex-dev/polar": "^0.8.1",
+    "@ai-sdk/openai": "^3.0.0",
+    "@openrouter/ai-sdk-provider": "^2.10.0",
     "@react-three/fiber": "^9.5.0",
     "@shadergradient/react": "^2.4.20",
     "ai": "^6.0.105",
-    "camera-controls": "^3.1.2",
     "convex": "^1.32.0",
     "isbot": "^5.1.31",
     "jszip": "^3.10.1",
@@ -28,7 +28,7 @@
     "react-dom": "^19.1.1",
     "react-router": "^7.10.0",
     "three": "^0.183.2",
-    "three-stdlib": "^2.36.1",
+    "unpdf": "^1.7.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -38,7 +38,6 @@
     "@types/node": "^22.19.13",
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
-    "@types/three": "^0.183.1",
     "tailwindcss": "^4.1.13",
     "typescript": "^5.9.2",
     "vite": "^7.1.7",
