@@ -103,6 +103,7 @@ export default defineSchema({
         modelId: v.string(),
         finishReason: v.string(),
         repairedOutput: v.optional(v.boolean()),
+        retryCount: v.optional(v.number()),
         pdfSizeBytes: v.number(),
         extractionPath: v.optional(v.string()),
         sourcePageCount: v.optional(v.number()),

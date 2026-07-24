@@ -183,6 +183,10 @@ test("scorer reacts predictably to controlled perturbations", () => {
   assert.equal(normalized.normalizationPenalty, 6, "each deterministic repair costs two points");
   assert.equal(normalized.total, 94, "normalization penalty reduces total score");
 
+  const retried = scoreFixture(fixture, reference, 0, 1);
+  assert.equal(retried.retryPenalty, 5, "a schema retry costs five points");
+  assert.equal(retried.total, 95, "retry penalty reduces total score");
+
 });
 
 test("uses globally optimal mode pairing", () => {

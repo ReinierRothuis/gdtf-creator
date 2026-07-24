@@ -3,9 +3,11 @@
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { generateText, NoObjectGeneratedError, Output } from "ai";
-import { fixtureDataSchema, repairFixtureData } from "./schema/fixture";
-import { createExtractionRequest, getExtractionPath } from "./extractionPaths";
+import {
+  createExtractionRequest,
+  generateFixtureData,
+  getExtractionPath,
+} from "./extractionPaths";
 import { getExtractionPrompt } from "./extractionPrompt";
 import type { Id } from "./_generated/dataModel";
 
@@ -42,48 +44,21 @@ export const extractFixtureData = internalAction({
         extractionPath,
         pdfUrl
       );
-      const result = await (async () => {
-        try {
-          const generated = await generateText({
-            model: extraction.model,
-            output: Output.object({ schema: fixtureDataSchema }),
-            messages: [{ role: "user", content: extraction.content }],
-            providerOptions: extraction.providerOptions,
-            temperature: extraction.path === "openai-gpt-nano-native" ? undefined : 0,
-            maxOutputTokens: 65536,
-          });
-          if (!generated.output) throw new Error("No structured output returned from LLM");
-          return {
-            fixtureData: generated.output,
-            usage: generated.usage,
-            modelId: generated.response.modelId,
-            finishReason: generated.finishReason,
-            repairedOutput: false,
-          };
-        } catch (error) {
-          if (!NoObjectGeneratedError.isInstance(error) || !error.text) throw error;
-          return {
-            fixtureData: repairFixtureData(error.text),
-            usage: error.usage,
-            modelId: error.response?.modelId ?? "unknown",
-            finishReason: error.finishReason ?? "unknown",
-            repairedOutput: true,
-          };
-        } finally {
-          await extraction.cleanup?.().catch((error) =>
-            console.warn("Anthropic file cleanup failed", error)
-          );
-        }
-      })();
+      const result = await generateFixtureData(extraction).finally(() =>
+        extraction.cleanup?.().catch((error) =>
+          console.warn("Anthropic file cleanup failed", error)
+        )
+      );
 
       const extractionStats = {
-        promptTokens: result.usage?.inputTokens ?? 0,
-        completionTokens: result.usage?.outputTokens ?? 0,
-        totalTokens: result.usage?.totalTokens ?? 0,
+        promptTokens: result.inputTokens,
+        completionTokens: result.outputTokens,
+        totalTokens: result.totalTokens,
         extractionDurationMs: Date.now() - startTime,
         modelId: result.modelId,
         finishReason: result.finishReason,
-        repairedOutput: result.repairedOutput,
+        repairedOutput: result.repairs.length > 0,
+        retryCount: result.retryCount,
         pdfSizeBytes,
         extractionPath: extraction.path,
         ...(extraction.sourcePageCount === undefined

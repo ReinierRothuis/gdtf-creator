@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { readdir, readFile, stat, mkdir, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { generateText, NoObjectGeneratedError, Output } from "ai";
 import { XMLParser } from "fast-xml-parser";
 import JSZip from "jszip";
 import {
@@ -12,12 +11,13 @@ import {
 } from "../convex/schema/fixture.ts";
 import {
   createExtractionRequest,
+  generateFixtureData,
   EXTRACTION_PATHS,
   type ExtractionPath,
 } from "../convex/extractionPaths.ts";
 import { getExtractionPrompt } from "../convex/extractionPrompt.ts";
 
-const BENCHMARK_VERSION = 3;
+const BENCHMARK_VERSION = 4;
 const PATH_COLORS: Record<ExtractionPath, string> = {
   "claude-haiku-native": "#d9ff43",
   "gemini-flash-lite-native": "#37d8ff",
@@ -54,6 +54,7 @@ type MetricScores = {
   wheels: number | null;
   physical: number | null;
   normalizationPenalty: number;
+  retryPenalty: number;
 };
 type ObservedFunction = {
   offset: number;
@@ -115,6 +116,7 @@ type BenchmarkResult = {
   rawOutput?: string;
   repaired?: boolean;
   repairs?: string[];
+  retryCount?: number;
   error?: string;
 };
 
@@ -495,7 +497,8 @@ function softFunctionF1(
 export function scoreFixture(
   fixture: FixtureData,
   reference: Observation,
-  repairCount = 0
+  repairCount = 0,
+  retryCount = 0
 ): MetricScores {
   const predicted = predictedObservation(fixture);
   const pairs = pairModes(predicted.modes, reference.modes);
@@ -578,8 +581,9 @@ export function scoreFixture(
     0
   ) / totalWeight * 100;
   const normalizationPenalty = Math.min(20, repairCount * 2);
+  const retryPenalty = retryCount * 5;
   return {
-    total: Math.max(0, weightedTotal - normalizationPenalty),
+    total: Math.max(0, weightedTotal - normalizationPenalty - retryPenalty),
     identity: scores.identity * 100,
     modes: scores.modes * 100,
     channels: scores.channels * 100,
@@ -587,6 +591,7 @@ export function scoreFixture(
     wheels: scores.wheels === null ? null : scores.wheels * 100,
     physical: scores.physical === null ? null : scores.physical * 100,
     normalizationPenalty,
+    retryPenalty,
   };
 }
 
@@ -688,7 +693,6 @@ function extractionPromptHash(path: ExtractionPath): string {
 }
 
 async function runOne(pair: Pair, path: ExtractionPath): Promise<BenchmarkResult> {
-  const prompt = getExtractionPrompt(path);
   const key = `${BENCHMARK_VERSION}:${extractionPromptHash(path)}:${pair.fingerprint}:${path}`;
   const started = performance.now();
   let cleanup: (() => Promise<void>) | undefined;
@@ -696,81 +700,50 @@ async function runOne(pair: Pair, path: ExtractionPath): Promise<BenchmarkResult
     const preprocessingStarted = performance.now();
     const request = await createExtractionRequest(
       pair.pdf.buffer.slice(pair.pdf.byteOffset, pair.pdf.byteOffset + pair.pdf.byteLength) as ArrayBuffer,
-      prompt,
+      getExtractionPrompt(path),
       path
     );
     cleanup = request.cleanup;
     const preprocessingMs = performance.now() - preprocessingStarted;
     const generationStarted = performance.now();
-    const result = await generateText({
-      model: request.model,
-      output: Output.object({ schema: fixtureDataSchema }),
-      messages: [{ role: "user", content: request.content }],
-      providerOptions: request.providerOptions,
-      temperature: path === "openai-gpt-nano-native" ? undefined : 0,
-      maxOutputTokens: 65536,
-    });
-    const output = result.output;
-    if (!output) throw new Error("No structured output returned");
-    const inputTokens = result.usage.inputTokens ?? 0;
-    const outputTokens = result.usage.outputTokens ?? 0;
+    const result = await generateFixtureData(request);
     return {
       key,
       fixture: pair.name,
       path,
       status: "ok",
-      modelId: result.response.modelId,
-      inputTokens,
-      outputTokens,
-      totalTokens: result.usage.totalTokens ?? inputTokens + outputTokens,
+      modelId: result.modelId,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+      totalTokens: result.totalTokens,
       preprocessingMs,
       generationMs: performance.now() - generationStarted,
       durationMs: performance.now() - started,
-      estimatedCost: estimateCost(path, inputTokens, outputTokens),
-      scores: scoreFixture(output, pair.reference),
-      output,
+      estimatedCost: estimateCost(path, result.inputTokens, result.outputTokens),
+      scores: scoreFixture(
+        result.fixtureData,
+        pair.reference,
+        result.repairs.length,
+        result.retryCount
+      ),
+      output: result.fixtureData,
+      rawOutput: result.rawOutput,
+      repaired: result.repairs.length > 0,
+      repairs: result.repairs,
+      retryCount: result.retryCount,
     };
   } catch (error) {
-    const failed = NoObjectGeneratedError.isInstance(error) ? error : undefined;
-    const inputTokens = failed?.usage?.inputTokens ?? 0;
-    const outputTokens = failed?.usage?.outputTokens ?? 0;
-    if (failed?.text) {
-      try {
-        const { fixtureData: output, repairs } = repairFixtureDataWithReport(failed.text);
-        return {
-          key,
-          fixture: pair.name,
-          path,
-          status: "ok",
-          modelId: failed.response?.modelId,
-          inputTokens,
-          outputTokens,
-          totalTokens: failed.usage?.totalTokens ?? inputTokens + outputTokens,
-          preprocessingMs: 0,
-          generationMs: 0,
-          durationMs: performance.now() - started,
-          estimatedCost: estimateCost(path, inputTokens, outputTokens),
-          scores: scoreFixture(output, pair.reference, repairs.length),
-          output,
-          rawOutput: failed.text,
-          repaired: true,
-          repairs,
-        };
-      } catch {}
-    }
     return {
       key,
       fixture: pair.name,
       path,
       status: "error",
-      modelId: failed?.response?.modelId,
-      inputTokens,
-      outputTokens,
-      totalTokens: failed?.usage?.totalTokens ?? inputTokens + outputTokens,
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
       preprocessingMs: 0,
       generationMs: 0,
       durationMs: performance.now() - started,
-      ...(failed ? { estimatedCost: estimateCost(path, inputTokens, outputTokens), rawOutput: failed.text } : {}),
       error: describeError(error),
     };
   } finally {
@@ -837,6 +810,7 @@ export function reportHtml(results: BenchmarkResult[], fixtureCount: number): st
   const winner = aggregates[0];
   const successful = results.filter((result) => result.status === "ok");
   const repaired = successful.filter((result) => result.repaired).length;
+  const retried = successful.filter((result) => result.retryCount).length;
   const generatedAt = new Date().toISOString();
   const data = JSON.stringify({ aggregates, results: results.map(({ output, ...result }) => result) }).replace(/</g, "\\u003c");
   const metric = (value: number, suffix = "") => `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}${suffix}`;
@@ -845,12 +819,12 @@ export function reportHtml(results: BenchmarkResult[], fixtureCount: number): st
 <style>
 :root{--ink:#11130f;--paper:#f0eddf;--grid:#cbc7b8;--acid:#d9ff43;--orange:#ff6b35;--blue:#37d8ff;--muted:#6e7068}*{box-sizing:border-box}body{margin:0;color:var(--ink);background-color:var(--paper);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:32px 32px;font-family:"Courier New",monospace}.shell{max-width:1500px;margin:auto;background:var(--paper);border-inline:2px solid var(--ink);min-height:100vh}header{position:relative;padding:42px 44px 34px;border-bottom:4px solid var(--ink);overflow:hidden}header:after{content:"BENCH / 01";position:absolute;right:-22px;top:22px;padding:8px 38px;background:var(--ink);color:var(--acid);transform:rotate(8deg);font-weight:900}h1{font-family:Impact,"Arial Narrow",sans-serif;font-size:clamp(3.5rem,9vw,9rem);font-weight:900;line-height:.78;letter-spacing:-.035em;text-transform:uppercase;margin:0;max-width:1100px}.kicker{font-weight:900;letter-spacing:.16em;margin-bottom:24px}.meta{display:flex;gap:22px;flex-wrap:wrap;margin-top:28px;font-size:.78rem;text-transform:uppercase}.meta span{border-left:8px solid var(--orange);padding-left:10px}.summary{display:grid;grid-template-columns:2fr repeat(3,1fr);border-bottom:2px solid var(--ink)}.card{min-height:172px;padding:24px;border-right:2px solid var(--ink)}.card:last-child{border:0}.card.winner{background:var(--acid)}.label{text-transform:uppercase;font-weight:900;font-size:.72rem;letter-spacing:.12em}.big{font-family:Impact,"Arial Narrow",sans-serif;font-size:4rem;line-height:1;margin:14px 0 4px}.winner .big{font-size:2rem;overflow-wrap:anywhere}.section{padding:34px 44px;border-bottom:2px solid var(--ink)}h2{font-family:Impact,"Arial Narrow",sans-serif;font-size:2.7rem;letter-spacing:.02em;text-transform:uppercase;margin:0 0 22px}.charts{display:grid;grid-template-columns:1fr 1fr;gap:28px}.chart{border:2px solid var(--ink);background:#f7f4e8;padding:18px}.chart h3{margin:0 0 12px;text-transform:uppercase;font-size:.8rem}.chart svg{width:100%;height:300px;display:block}.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.7rem;margin-top:10px}.dot{display:inline-block;width:10px;height:10px;margin-right:6px;border:1px solid var(--ink)}table{width:100%;border-collapse:collapse;background:#f7f4e8;font-size:.76rem}th,td{padding:12px 10px;border:1px solid var(--ink);text-align:right}th{background:var(--ink);color:var(--paper);text-transform:uppercase;letter-spacing:.06em;position:sticky;top:0}td:first-child,td:nth-child(2),th:first-child,th:nth-child(2){text-align:left}.rank{font-family:Impact,"Arial Narrow",sans-serif;font-size:1.4rem}.scorebar{display:flex;align-items:center;gap:8px}.scorebar i{display:block;height:9px;background:var(--acid);border:1px solid var(--ink)}.matrix{display:grid;grid-template-columns:minmax(150px,1fr) repeat(${Math.max(1, aggregates.length)},minmax(120px,1fr));border-top:2px solid var(--ink);border-left:2px solid var(--ink)}.matrix>*{padding:11px;border-right:2px solid var(--ink);border-bottom:2px solid var(--ink);font-size:.72rem}.matrix .head{background:var(--ink);color:var(--paper);font-weight:900;overflow-wrap:anywhere}.matrix .cell{font-family:Impact,"Arial Narrow",sans-serif;font-size:1.4rem;text-align:center}.method{columns:2;column-gap:40px;line-height:1.65;font-size:.78rem}.method p{margin-top:0}.error{color:#ad2400;max-width:320px;white-space:normal;text-align:left}footer{padding:20px 44px;background:var(--ink);color:var(--paper);font-size:.7rem;display:flex;justify-content:space-between}@media(max-width:850px){.summary,.charts{grid-template-columns:1fr}.card{border-right:0;border-bottom:2px solid var(--ink)}.section,header{padding-inline:20px}.matrix{overflow:auto;display:block}.method{columns:1}.charts{gap:14px}}
 </style></head><body><main class="shell"><header><div class="kicker">GDTF CREATOR // MODEL EXTRACTION LAB</div><h1>Truth<br>vs Tokens</h1><div class="meta"><span>${fixtureCount} reference fixtures</span><span>${results.length} evaluations</span><span>${escapeHtml(generatedAt)}</span></div></header>
-<section class="summary"><div class="card winner"><div class="label">Best correctness</div><div class="big">${escapeHtml(winner?.path ?? "NO RESULT")}</div><div>${winner ? metric(winner.score, "%") : "—"} weighted score</div></div><div class="card"><div class="label">Successful evaluations</div><div class="big">${successful.length}/${results.length}</div><div>schema-valid · ${repaired} normalized</div></div><div class="card"><div class="label">Winner tokens</div><div class="big">${winner ? metric(winner.tokens) : "—"}</div><div>mean in + out</div></div><div class="card"><div class="label">Winner latency</div><div class="big">${winner ? metric(winner.duration / 1000, "s") : "—"}</div><div>end-to-end mean</div></div></section>
+<section class="summary"><div class="card winner"><div class="label">Best correctness</div><div class="big">${escapeHtml(winner?.path ?? "NO RESULT")}</div><div>${winner ? metric(winner.score, "%") : "—"} weighted score</div></div><div class="card"><div class="label">Successful evaluations</div><div class="big">${successful.length}/${results.length}</div><div>schema-valid · ${retried} retried · ${repaired} normalized</div></div><div class="card"><div class="label">Winner tokens</div><div class="big">${winner ? metric(winner.tokens) : "—"}</div><div>mean in + out</div></div><div class="card"><div class="label">Winner latency</div><div class="big">${winner ? metric(winner.duration / 1000, "s") : "—"}</div><div>end-to-end mean</div></div></section>
 <section class="section"><h2>Performance field</h2><div class="charts"><div class="chart"><h3>Correctness by extraction path</h3><svg id="bars" role="img" aria-label="Mean correctness scores"></svg></div><div class="chart"><h3>Token efficiency — upper/left wins</h3><svg id="scatter" role="img" aria-label="Tokens versus correctness"></svg></div></div><div class="legend">${aggregates.map((item) => `<span><i class="dot" style="background:${item.color}"></i>${escapeHtml(item.path)}</span>`).join("")}</div></section>
 <section class="section"><h2>Leaderboard</h2><table><thead><tr><th># / path</th><th>model</th><th>score</th><th>σ score</th><th>success</th><th>input tok</th><th>output tok</th><th>total tok</th><th>latency</th><th>est. total cost</th></tr></thead><tbody>${aggregates.map((item, index) => `<tr><td><span class="rank">${String(index + 1).padStart(2, "0")}</span> ${escapeHtml(item.path)}</td><td>${escapeHtml(results.find((row) => row.path === item.path && row.modelId)?.modelId ?? "—")}</td><td><div class="scorebar"><i style="width:${item.score}px"></i>${metric(item.score, "%")}</div></td><td>${metric(item.deviation, "pp")}</td><td>${metric(item.success, "%")}</td><td>${metric(item.inputTokens)}</td><td>${metric(item.outputTokens)}</td><td>${metric(item.tokens)}</td><td>${metric(item.duration / 1000, "s")}</td><td>${item.cost === null ? "—" : `$${item.cost.toFixed(4)}`}</td></tr>`).join("")}</tbody></table></section>
 <section class="section"><h2>Fixture matrix</h2><div class="matrix"><div class="head">Fixture</div>${aggregates.map((item) => `<div class="head">${escapeHtml(item.path)}</div>`).join("")}${[...new Set(results.map((result) => result.fixture))].flatMap((fixture) => [`<div><strong>${escapeHtml(fixture)}</strong></div>`, ...aggregates.map((item) => { const rows = results.filter((row) => row.fixture === fixture && row.path === item.path && row.status === "ok"); const score = average(rows.map((row) => row.scores!.total)); return `<div class="cell" style="background:${rows.length ? `color-mix(in srgb, ${item.color} ${Math.round(score)}%, #f7f4e8)` : "#ffb4a2"}">${rows.length ? metric(score, "%") : "ERR"}</div>`; })]).join("")}</div></section>
-<section class="section"><h2>Fixture detail</h2><table><thead><tr><th>fixture</th><th>path</th><th>total</th><th>repair penalty</th><th>modes</th><th>channels</th><th>functions</th><th>wheels</th><th>physical</th><th>tokens</th><th>time</th></tr></thead><tbody>${results.map((row) => `<tr><td>${escapeHtml(row.fixture)}</td><td>${escapeHtml(row.path)}</td>${row.status === "ok" ? `<td>${metric(row.scores!.total, "%")}</td><td>${metric(row.scores!.normalizationPenalty, "pp")}</td><td>${metric(row.scores!.modes, "%")}</td><td>${metric(row.scores!.channels, "%")}</td><td>${metric(row.scores!.functions, "%")}</td><td>${row.scores!.wheels === null ? "—" : metric(row.scores!.wheels, "%")}</td><td>${row.scores!.physical === null ? "—" : metric(row.scores!.physical, "%")}</td><td>${row.totalTokens.toLocaleString()}</td><td>${metric(row.durationMs / 1000, "s")}</td>` : `<td class="error" colspan="9">${escapeHtml(row.error)}</td>`}</tr>`).join("")}</tbody></table></section>
-<section class="section method"><h2>Scoring protocol</h2><p><strong>Total score:</strong> identity 10%, DMX modes 20%, channels/defaults/fine links 35%, function range overlap 20%, wheel slots/colors 10%, physical/beam data 5%. Missing optional reference data is removed and weights are normalized. Deterministic repairs subtract 2 points each, capped at 20.</p><p><strong>Matching:</strong> modes pair by channel footprint and name similarity. Channels and function boundaries use set F1, penalizing omissions and hallucinations equally. Trivial single 0–255 functions are excluded. Physical values use relative numeric closeness. “Normalized” outputs had deterministic serialization/layout repairs before strict validation.</p><p><strong>Costs:</strong> leaderboard totals successful evaluations using hardcoded standard rates checked 2026-07-24. Cloudflare Markdown conversion is treated as free; potential image-processing overages are excluded. Token counts come from provider usage. Treat scores as regression signals; inspect source GDTFs where modeling conventions differ.</p></section>
+<section class="section"><h2>Fixture detail</h2><table><thead><tr><th>fixture</th><th>path</th><th>total</th><th>retry penalty</th><th>repair penalty</th><th>modes</th><th>channels</th><th>functions</th><th>wheels</th><th>physical</th><th>tokens</th><th>time</th></tr></thead><tbody>${results.map((row) => `<tr><td>${escapeHtml(row.fixture)}</td><td>${escapeHtml(row.path)}</td>${row.status === "ok" ? `<td>${metric(row.scores!.total, "%")}</td><td>${metric(row.scores!.retryPenalty, "pp")}</td><td>${metric(row.scores!.normalizationPenalty, "pp")}</td><td>${metric(row.scores!.modes, "%")}</td><td>${metric(row.scores!.channels, "%")}</td><td>${metric(row.scores!.functions, "%")}</td><td>${row.scores!.wheels === null ? "—" : metric(row.scores!.wheels, "%")}</td><td>${row.scores!.physical === null ? "—" : metric(row.scores!.physical, "%")}</td><td>${row.totalTokens.toLocaleString()}</td><td>${metric(row.durationMs / 1000, "s")}</td>` : `<td class="error" colspan="10">${escapeHtml(row.error)}</td>`}</tr>`).join("")}</tbody></table></section>
+<section class="section method"><h2>Scoring protocol</h2><p><strong>Total score:</strong> identity 10%, DMX modes 20%, channels/defaults/fine links 35%, function range overlap 20%, wheel slots/colors 10%, physical/beam data 5%. Missing optional reference data is removed and weights are normalized. A schema retry subtracts 5 points; deterministic repairs subtract 2 points each, capped at 20.</p><p><strong>Matching:</strong> modes pair by channel footprint and name similarity. Channels and function boundaries use set F1, penalizing omissions and hallucinations equally. Trivial single 0–255 functions are excluded. Physical values use relative numeric closeness. “Normalized” outputs had deterministic serialization/layout repairs before strict validation.</p><p><strong>Costs:</strong> leaderboard totals successful evaluations using hardcoded standard rates checked 2026-07-24. Cloudflare Markdown conversion is treated as free; potential image-processing overages are excluded. Token counts come from provider usage. Treat scores as regression signals; inspect source GDTFs where modeling conventions differ.</p></section>
 <footer><span>GDTF CREATOR / BENCHMARK v${BENCHMARK_VERSION}</span><span>RAW RESULTS: COMPANION JSON</span></footer></main>
 <script>const DATA=${data};const NS="http://www.w3.org/2000/svg";function el(n,a={}){const x=document.createElementNS(NS,n);for(const[k,v]of Object.entries(a))x.setAttribute(k,v);return x}function text(svg,x,y,value,anchor="start"){const t=el("text",{x,y,"text-anchor":anchor,fill:"#11130f","font-size":"11","font-family":"Courier New"});t.textContent=value;svg.append(t)}const A=DATA.aggregates;{const s=document.querySelector("#bars"),w=600,h=300;s.setAttribute("viewBox","0 0 "+w+" "+h);A.forEach((d,i)=>{const y=18+i*(250/Math.max(1,A.length)),bh=30;const b=el("rect",{x:180,y,width:Math.max(1,d.score*3.7),height:bh,fill:d.color,stroke:"#11130f","stroke-width":2});b.append(el("title"));b.firstChild.textContent=d.path+": "+d.score.toFixed(1)+"%";s.append(b);text(s,170,y+20,d.path,"end");text(s,190+d.score*3.7,y+20,d.score.toFixed(1)+"%");});} {const s=document.querySelector("#scatter"),w=600,h=300,p=42;s.setAttribute("viewBox","0 0 "+w+" "+h);const max=Math.max(1,...A.map(d=>d.tokens))*1.1;s.append(el("line",{x1:p,y1:h-p,x2:w-p,y2:h-p,stroke:"#11130f","stroke-width":2}),el("line",{x1:p,y1:p,x2:p,y2:h-p,stroke:"#11130f","stroke-width":2}));text(s,w/2,h-8,"MEAN TOTAL TOKENS","middle");const ylabel=text.bind(null,s,12,20);ylabel("SCORE ↑");A.forEach(d=>{const x=p+d.tokens/max*(w-2*p),y=h-p-d.score/100*(h-2*p);const c=el("circle",{cx:x,cy:y,r:10,fill:d.color,stroke:"#11130f","stroke-width":3});const title=el("title");title.textContent=d.path+"\\n"+d.score.toFixed(1)+"% / "+Math.round(d.tokens)+" tokens";c.append(title);s.append(c);text(s,x,y-15,d.path.split("-")[0],"middle")});text(s,p,h-p+18,"0","middle");text(s,w-p,h-p+18,Math.round(max).toLocaleString(),"middle");}</script></body></html>`;
 }
@@ -891,7 +865,12 @@ async function main() {
           output,
           repaired: true,
           repairs,
-          scores: scoreFixture(output, task.pair.reference, repairs.length),
+          scores: scoreFixture(
+            output,
+            task.pair.reference,
+            repairs.length,
+            item.retryCount ?? 0
+          ),
         } as BenchmarkResult);
       } catch {}
     } else if (item.status === "ok" && item.output) {
@@ -902,7 +881,12 @@ async function main() {
         path: task.path,
         status: "ok",
         estimatedCost,
-        scores: scoreFixture(item.output, task.pair.reference, item.repairs?.length ?? 0),
+        scores: scoreFixture(
+          item.output,
+          task.pair.reference,
+          item.repairs?.length ?? 0,
+          item.retryCount ?? 0
+        ),
       } as BenchmarkResult);
     }
   }

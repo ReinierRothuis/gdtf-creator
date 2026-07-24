@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { MockLanguageModelV3 } from "ai/test";
 import {
   EXTRACTION_PATHS,
   createExtractionRequest,
+  generateFixtureData,
   getExtractionPath,
   sanitizeAnthropicSchema,
 } from "../convex/extractionPaths.ts";
@@ -43,6 +45,51 @@ test("disables OpenAI strict schemas for optional extraction fields", async () =
     if (previous === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = previous;
   }
+});
+
+test("retries schema-invalid output once and preserves cumulative usage", async () => {
+  const fixture = {
+    manufacturer: "Test",
+    name: "Fixture",
+    shortName: "Fixture",
+    fixtureType: "Other",
+    dmxModes: [{
+      name: "1 channel",
+      channelCount: 1,
+      channels: [{ channel: 1, gdtfAttribute: "Dimmer", prettyName: "Dim", defaultValue: 0 }],
+    }],
+    physical: {
+      weight: "1 kg",
+      width: "1 mm",
+      height: "1 mm",
+      depth: "1 mm",
+      powerConsumption: "1 W",
+    },
+  };
+  const usage = {
+    inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+    outputTokens: { total: 1, text: 1, reasoning: 0 },
+  };
+  let attempt = 0;
+  const model = new MockLanguageModelV3({
+    doGenerate: () => ({
+      content: [{ type: "text", text: attempt++ ? JSON.stringify(fixture) : "{}" }],
+      finishReason: { unified: "stop", raw: "stop" },
+      usage,
+      warnings: [],
+    }),
+  });
+
+  const result = await generateFixtureData({
+    path: "claude-haiku-native",
+    model,
+    content: [{ type: "text", text: "extract" }],
+  });
+
+  assert.equal(result.retryCount, 1);
+  assert.equal(result.fixtureData.name, "Fixture");
+  assert.equal(result.totalTokens, 4);
+  assert.equal(model.doGenerateCalls.length, 2);
 });
 
 test("removes numeric constraints unsupported by Anthropic output schemas", () => {

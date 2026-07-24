@@ -4,8 +4,14 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { google } from "@ai-sdk/google";
 import { openai } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import type { JSONValue, LanguageModel, UserContent } from "ai";
+import { generateText, NoObjectGeneratedError, Output } from "ai";
+import type { JSONValue, LanguageModel, ModelMessage, UserContent } from "ai";
 import { extractText, getDocumentProxy } from "unpdf";
+import {
+  fixtureDataSchema,
+  repairFixtureDataWithReport,
+  type FixtureData,
+} from "./schema/fixture.ts";
 
 export const EXTRACTION_PATHS = [
   "claude-haiku-native",
@@ -17,7 +23,7 @@ export const EXTRACTION_PATHS = [
 
 export type ExtractionPath = (typeof EXTRACTION_PATHS)[number];
 
-interface ExtractionRequest {
+export interface ExtractionRequest {
   path: ExtractionPath;
   model: LanguageModel;
   content: UserContent;
@@ -273,6 +279,107 @@ export async function createExtractionRequest(
         ],
         sourceCharacterCount: text.length,
       };
+    }
+  }
+}
+
+export async function generateFixtureData(request: ExtractionRequest): Promise<{
+  fixtureData: FixtureData;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  modelId: string;
+  finishReason: string;
+  retryCount: number;
+  repairs: string[];
+  rawOutput?: string;
+}> {
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let totalTokens = 0;
+  const generate = async (messages: ModelMessage[]) => {
+    try {
+      const result = await generateText({
+        model: request.model,
+        output: Output.object({ schema: fixtureDataSchema }),
+        messages,
+        providerOptions: request.providerOptions,
+        temperature: request.path === "openai-gpt-nano-native" ? undefined : 0,
+        maxOutputTokens: 65536,
+      });
+      inputTokens += result.usage.inputTokens ?? 0;
+      outputTokens += result.usage.outputTokens ?? 0;
+      totalTokens += result.usage.totalTokens ??
+        (result.usage.inputTokens ?? 0) + (result.usage.outputTokens ?? 0);
+      return result;
+    } catch (error) {
+      if (NoObjectGeneratedError.isInstance(error)) {
+        inputTokens += error.usage?.inputTokens ?? 0;
+        outputTokens += error.usage?.outputTokens ?? 0;
+        totalTokens += error.usage?.totalTokens ??
+          (error.usage?.inputTokens ?? 0) + (error.usage?.outputTokens ?? 0);
+      }
+      throw error;
+    }
+  };
+
+  const firstMessages = [{ role: "user" as const, content: request.content }];
+  try {
+    const result = await generate(firstMessages);
+    if (!result.output) throw new Error("No structured output returned from LLM");
+    return {
+      fixtureData: result.output,
+      inputTokens,
+      outputTokens,
+      totalTokens,
+      modelId: result.response.modelId,
+      finishReason: result.finishReason,
+      retryCount: 0,
+      repairs: [],
+    };
+  } catch (firstError) {
+    if (!NoObjectGeneratedError.isInstance(firstError) || !firstError.text) throw firstError;
+
+    try {
+      const result = await generate([
+        ...firstMessages,
+        { role: "assistant" as const, content: firstError.text },
+        {
+          role: "user" as const,
+          content: `The previous extraction failed schema validation. Return the complete corrected fixture data, preserving all valid extracted information. Do not explain the correction.\n\nValidation error:\n${firstError.message}`,
+        },
+      ]);
+      if (!result.output) throw new Error("No structured output returned from retry");
+      return {
+        fixtureData: result.output,
+        inputTokens,
+        outputTokens,
+        totalTokens,
+        modelId: result.response.modelId,
+        finishReason: result.finishReason,
+        retryCount: 1,
+        repairs: [],
+      };
+    } catch (retryError) {
+      const failedRetry = NoObjectGeneratedError.isInstance(retryError) ? retryError : undefined;
+      for (const rawOutput of [failedRetry?.text, firstError.text]) {
+        if (!rawOutput) continue;
+        try {
+          const { fixtureData, repairs } = repairFixtureDataWithReport(rawOutput);
+          return {
+            fixtureData,
+            inputTokens,
+            outputTokens,
+            totalTokens,
+            modelId: failedRetry?.response?.modelId ?? firstError.response?.modelId ?? "unknown",
+            finishReason: failedRetry?.finishReason ?? firstError.finishReason ?? "unknown",
+            retryCount: 1,
+            repairs,
+            rawOutput,
+          };
+        } catch {}
+      }
+      throw retryError;
     }
   }
 }
