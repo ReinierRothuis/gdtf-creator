@@ -17,7 +17,7 @@ import {
 } from "../convex/extractionPaths.ts";
 import { getExtractionPrompt } from "../convex/extractionPrompt.ts";
 
-const BENCHMARK_VERSION = 4;
+const BENCHMARK_VERSION = 5;
 const PATH_COLORS: Record<ExtractionPath, string> = {
   "claude-haiku-native": "#d9ff43",
   "gemini-flash-lite-native": "#37d8ff",

@@ -81,6 +81,17 @@ test("validates fixture semantics and wheel colors", () => {
     }).success,
     false,
   );
+  assert.equal(
+    fixtureDataSchema.safeParse({
+      ...fixture,
+      dmxModes: [{
+        ...fixture.dmxModes[0],
+        channels: [fixture.dmxModes[0].channels[1]],
+      }],
+    }).success,
+    false,
+    "sparse DMX layouts are invalid",
+  );
 });
 
 test("emits declared attributes, unique functions, and linked CIE wheel slots", () => {

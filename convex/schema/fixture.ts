@@ -10,7 +10,9 @@ export const channelFunctionSchema = z
     name: requiredString,
     dmxFrom: dmxValue,
     dmxTo: dmxValue,
-    attribute: z.optional(requiredString),
+    attribute: z.optional(requiredString).describe(
+      "GDTF attribute active in this range. Always set this for every function when a channel has multiple ranges; do not rely on the channel default."
+    ),
     physicalFrom: z.optional(z.number()),
     physicalTo: z.optional(z.number()),
   })
@@ -21,8 +23,8 @@ export const channelFunctionSchema = z
 
 const channelFunctionsSchema = z
   .array(channelFunctionSchema)
-  .min(1)
   .superRefine((functions, ctx) => {
+    if (!functions.length) return;
     if (functions[0].dmxFrom !== 0) {
       ctx.addIssue({
         code: "custom",
@@ -50,7 +52,9 @@ const channelFunctionsSchema = z
 
 export const dmxChannelSchema = z.object({
   channel: positiveInt,
-  gdtfAttribute: requiredString,
+  gdtfAttribute: requiredString.describe(
+    "Exact standard GDTF attribute, not the manual label (for example Lime is ColorAdd_GY)."
+  ),
   prettyName: requiredString,
   defaultValue: dmxValue,
   fineOf: z.optional(positiveInt),
@@ -66,17 +70,23 @@ export const subFixtureChannelSchema = z.object({
 
 export const subFixtureLayoutSchema = z.object({
   name: requiredString,
-  count: positiveInt,
-  channels: z.array(subFixtureChannelSchema).min(1),
-  firstChannel: positiveInt,
+  count: positiveInt.describe("Number of identical contiguous repeated blocks."),
+  channels: z.array(subFixtureChannelSchema).min(1).describe(
+    "Complete ordered channel template for one repeated block; blocks may be heads or sections, not only pixels."
+  ),
+  firstChannel: positiveInt.describe("Actual DMX channel where the first repeated block starts."),
 });
 
 export const dmxModeSchema = z
   .object({
     name: requiredString,
     channelCount: positiveInt,
-    channels: z.array(dmxChannelSchema),
-    subFixtures: z.optional(subFixtureLayoutSchema),
+    channels: z.array(dmxChannelSchema).describe(
+      "Direct/global channels only. If exact blocks repeat, put their full template in subFixtures instead of expanding them here."
+    ),
+    subFixtures: z.optional(subFixtureLayoutSchema).describe(
+      "Compact exact repeated head/cell/pixel blocks. Exclude these expanded channels from channels."
+    ),
   })
   .superRefine((mode, ctx) => {
     const occupied = new Set<number>();
@@ -149,6 +159,16 @@ export const dmxModeSchema = z
         code: "custom",
         message: "Declared channel count does not match channel layout",
         path: ["channelCount"],
+      });
+    }
+    const occupiedCount = occupied.size + (mode.subFixtures
+      ? mode.subFixtures.count * mode.subFixtures.channels.length
+      : 0);
+    if (occupiedCount !== mode.channelCount) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Channel layout must account for every channel in the mode",
+        path: ["channels"],
       });
     }
   });
@@ -238,6 +258,16 @@ export function repairFixtureDataWithReport(value: unknown): {
     delete fixture.wheels;
     repairs.push("removed empty wheels");
   }
+  let removedInvalidWheelColors = false;
+  for (const wheel of Array.isArray(fixture.wheels) ? fixture.wheels : []) {
+    for (const slot of Array.isArray(wheel.slots) ? wheel.slots : []) {
+      if (slot.color !== undefined && !/^#[0-9a-f]{6}$/i.test(slot.color)) {
+        delete slot.color;
+        removedInvalidWheelColors = true;
+      }
+    }
+  }
+  if (removedInvalidWheelColors) repairs.push("removed invalid wheel colors");
   if (fixture.physical && typeof fixture.physical === "object") {
     for (const key of ["panRange", "tiltRange"]) {
       if (fixture[key] !== undefined && fixture.physical[key] === undefined) {
@@ -280,13 +310,26 @@ export function repairFixtureDataWithReport(value: unknown): {
       repairs.push(`removed invalid sub-fixture layout from ${mode.name}`);
     }
 
+    let removedEmptyFunctions = false;
+    const allChannels = [
+      ...mode.channels,
+      ...(Array.isArray(mode.subFixtures?.channels) ? mode.subFixtures.channels : []),
+    ];
+    for (const channel of allChannels) {
+      if (Array.isArray(channel.functions) && channel.functions.length === 0) {
+        delete channel.functions;
+        removedEmptyFunctions = true;
+      }
+    }
+    if (removedEmptyFunctions) repairs.push(`removed empty functions from ${mode.name}`);
+
     const channelsByNumber = new Map<number, Record<string, any>>(
       mode.channels.map((channel: Record<string, any>) => [channel.channel, channel])
     );
     const fineTargets = new Set<number>();
     let removedFineLinks = false;
     let normalizedFunctions = false;
-    for (const channel of mode.channels) {
+    for (const channel of allChannels) {
       if (channel.fineOf !== undefined) {
         const coarse = channelsByNumber.get(channel.fineOf);
         if (
@@ -329,9 +372,14 @@ export function repairFixtureDataWithReport(value: unknown): {
     if (normalizedFunctions) repairs.push(`normalized function ranges in ${mode.name}`);
 
     const highestGlobal = Math.max(0, ...mode.channels.map((channel: Record<string, number>) => channel.channel));
-    if (mode.subFixtures && highestGlobal === mode.channelCount) {
-      delete mode.subFixtures;
-      repairs.push(`removed redundant sub-fixture layout from ${mode.name}`);
+    if (mode.subFixtures) {
+      const first = mode.subFixtures.firstChannel;
+      const last = first + mode.subFixtures.count * mode.subFixtures.channels.length - 1;
+      if (mode.channels.some((channel: Record<string, number>) =>
+        channel.channel >= first && channel.channel <= last)) {
+        delete mode.subFixtures;
+        repairs.push(`removed overlapping sub-fixture layout from ${mode.name}`);
+      }
     }
     const highestChannel = mode.subFixtures
       ? Math.max(highestGlobal, mode.subFixtures.firstChannel + mode.subFixtures.count * mode.subFixtures.channels.length - 1)
